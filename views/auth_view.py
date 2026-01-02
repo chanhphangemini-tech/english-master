@@ -160,15 +160,15 @@ def render_auth_page():
                             
                             # Generate and send OTP
                             otp = str(secrets.randbelow(900000) + 100000)
-                            try:
-                                send_otp_email(reg_email, otp)
+                            success, msg = send_otp_email(reg_email, otp)
+                            if success:
                                 st.session_state.otp_gen = otp
                                 st.session_state.otp_step = 2
                                 st.success("Đã gửi mã OTP đến email của bạn! Vui lòng kiểm tra hộp thư.")
                                 time.sleep(1)
                                 st.rerun()
-                            except Exception as e:
-                                st.error(f"Không thể gửi email OTP. Vui lòng thử lại sau. Lỗi: {str(e)}")
+                            else:
+                                st.error(f"Không thể gửi email OTP: {msg}")
             
             elif st.session_state.otp_step == 2:
                 # Step 2: OTP verification
@@ -219,14 +219,14 @@ def render_auth_page():
                     if st.button("Gửi lại OTP"):
                         reg_data = st.session_state.reg_data
                         otp = str(secrets.randbelow(900000) + 100000)
-                        try:
-                            send_otp_email(reg_data['email'], otp)
+                        success, msg = send_otp_email(reg_data['email'], otp)
+                        if success:
                             st.session_state.otp_gen = otp
                             st.success("Đã gửi lại mã OTP!")
                             time.sleep(1)
                             st.rerun()
-                        except Exception as e:
-                            st.error(f"Không thể gửi email OTP. Vui lòng thử lại sau. Lỗi: {str(e)}")
+                        else:
+                            st.error(f"Không thể gửi email OTP: {msg}")
                 
                 if st.button("Quay lại"):
                     st.session_state.otp_step = 1

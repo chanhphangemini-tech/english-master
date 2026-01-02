@@ -12,8 +12,16 @@ def send_otp_email(to_email, otp):
     
     Email config được lấy từ database (SystemSettings) trước, 
     fallback về secrets.toml nếu không tìm thấy.
+    
+    Returns:
+        (success: bool, message: str)
     """
     # Lấy cấu hình email từ database hoặc secrets
+    sender_email = None
+    sender_password = None
+    smtp_server = "smtp.gmail.com"
+    smtp_port = 587
+    
     try:
         from services.settings_service import get_email_config
         email_config = get_email_config()
@@ -29,23 +37,24 @@ def send_otp_email(to_email, otp):
             return False, "Gửi email đã bị tắt bởi Admin"
     except Exception as e:
         logger.warning(f"Error getting email config from database, falling back to secrets: {e}")
-        # Fallback to old method
-        smtp_server = "smtp.gmail.com"
-        smtp_port = 587
-        sender_email = st.secrets.get("email", {}).get("sender")
-        sender_password = st.secrets.get("email", {}).get("password")
+        # Fallback to secrets
+        try:
+            sender_email = st.secrets.get("email", {}).get("sender")
+            sender_password = st.secrets.get("email", {}).get("password")
+        except:
+            pass
 
     if not sender_email or not sender_password:
-        print(f"📧 [SIMULATION] Sending OTP {otp} to {to_email} (Missing Secrets)")
-        return True, "Mã OTP giả lập (Do chưa cấu hình Email Secrets)"
+        logger.warning(f"Email secrets not configured. Cannot send OTP to {to_email}")
+        return False, "Chưa cấu hình email. Vui lòng liên hệ Admin."
 
     try:
         msg = MIMEMultipart()
         msg['From'] = sender_email
         msg['To'] = to_email
         msg['Subject'] = "Mã xác thực English Master của bạn"
-        body = f"Xin chào,\n\nMã OTP của bạn là: {otp}\n\nMã này có hiệu lực trong 5 phút. Vui lòng không chia sẻ cho ai khác."
-        msg.attach(MIMEText(body, 'plain'))
+        body = f"Xin chào,\n\nMã OTP của bạn là: {otp}\n\nMã này có hiệu lực trong 5 phút. Vui lòng không chia sẻ cho ai khác.\n\nTrân trọng,\nEnglish Master Team"
+        msg.attach(MIMEText(body, 'plain', 'utf-8'))
 
         server = smtplib.SMTP(smtp_server, smtp_port)
         server.starttls()
@@ -53,7 +62,8 @@ def send_otp_email(to_email, otp):
         text = msg.as_string()
         server.sendmail(sender_email, to_email, text)
         server.quit()
+        logger.info(f"OTP email sent successfully to {to_email}")
         return True, "Đã gửi mã OTP qua Email!"
     except Exception as e:
-        print(f"Email Error: {e}")
+        logger.error(f"Email Error: {e}")
         return False, f"Lỗi gửi email: {str(e)}"
