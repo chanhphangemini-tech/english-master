@@ -27,7 +27,7 @@ ENV/
 
 # Streamlit
 .streamlit/secrets.toml
-.streamlit/config.toml
+# Note: config.toml is committed to ensure theme settings are applied on startup
 
 # Gemini cache
 .gemini/
