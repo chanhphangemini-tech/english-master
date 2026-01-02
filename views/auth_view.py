@@ -101,23 +101,16 @@ def render_auth_page():
                 reg_role = "user"
 
                 st.markdown("---")
-                st.markdown("###### Chọn gói dịch vụ:")
+                st.markdown("###### Gói dịch vụ:")
                 
-                # Only show available plans (Free and Premium)
-                plan_option = st.radio(
-                    "Gói:", 
-                    ["Free (Miễn phí)", "Premium (Trả phí - 600 lượt/tháng)"], 
-                    label_visibility="collapsed"
-                )
-                reg_plan = "premium" if "Premium" in plan_option else "free"
+                # Only Free plan is available (all paid plans disabled until payment gateway is ready)
+                st.markdown("**Free (Miễn phí)** - 5 lượt AI/ngày")
+                st.caption("💡 Gói Free: Miễn phí, phù hợp cho người mới bắt đầu")
                 
-                if reg_plan == "premium":
-                    st.caption("💡 Gói Premium: 600 lượt AI/tháng - Liên hệ Admin để đăng ký")
-                else:
-                    st.caption("💡 Gói Free: 5 lượt AI/ngày - Miễn phí")
+                reg_plan = "free"  # Force Free plan only
                 
                 # Show disabled plans info
-                st.info("ℹ️ **Gói Basic** (300 lượt/tháng) và **Gói Pro** (1200 lượt/tháng) đang được cập nhật. Sẽ sớm có mặt sau khi triển khai phương thức thanh toán.")
+                st.info("ℹ️ **Gói Basic** (300 lượt/tháng), **Gói Premium** (600 lượt/tháng) và **Gói Pro** (1200 lượt/tháng) đang được cập nhật. Sẽ sớm có mặt sau khi triển khai phương thức thanh toán. Admin có thể nâng cấp tài khoản thủ công.")
                 
                 if st.form_submit_button("Đăng ký", type="primary"):
                     if not all([reg_name, reg_email, reg_user, reg_pass]):
