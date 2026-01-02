@@ -35,7 +35,13 @@ def check_login(username, password):
         return None
         
     try:
-        response = supabase.table("Users").select("*").eq("username", username).execute()
+        # Trim username to handle whitespace issues
+        username_clean = username.strip() if username else ""
+        if not username_clean:
+            logger.warning("Login failed: Empty username")
+            return None
+            
+        response = supabase.table("Users").select("*").eq("username", username_clean).execute()
         if response.data:
             user = response.data[0]
             db_pass = str(user.get('password', ''))
