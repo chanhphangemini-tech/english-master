@@ -24,7 +24,9 @@ if 'pt_answers' not in st.session_state: st.session_state.pt_answers = {"lis": 0
 user_id = st.session_state.user_info.get("id")
 user_plan = st.session_state.user_info.get("plan", "free")
 user_role = st.session_state.user_info.get("role", "user")
-is_premium = user_plan == 'premium' or user_role == 'admin'
+# Check if user has premium subscription (basic/premium/pro) or is admin
+from services.premium_usage_service import has_premium_subscription
+is_premium = has_premium_subscription(user_plan=user_plan) or user_role == 'admin'
 
 st.title("🎯 Kiểm Tra Trình Độ Đầu Vào (Placement Test)")
 

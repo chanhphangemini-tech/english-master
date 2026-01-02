@@ -206,7 +206,10 @@ def get_user_comment(level: str, unit_key: str, user_id: int):
         res = supabase.table("GrammarLessonComments").select(
             "id, comment_text, created_at, updated_at"
         ).eq("level", level).eq("unit_key", unit_key).eq("user_id", int(user_id)).eq("is_deleted", False).maybe_single().execute()
-        return res.data if res.data else None
+        # Check if result exists and has data
+        if res and hasattr(res, 'data') and res.data:
+            return res.data
+        return None
     except Exception as e:
         import logging
         logging.error(f"Error getting user comment: {e}")
@@ -233,7 +236,10 @@ def get_user_vote(level: str, unit_key: str, user_id: int):
         return None
     try:
         res = supabase.table("GrammarLessonVotes").select("vote_type").eq("level", level).eq("unit_key", unit_key).eq("user_id", int(user_id)).maybe_single().execute()
-        return res.data.get('vote_type') if res.data else None
+        # Check if result exists and has data
+        if res and hasattr(res, 'data') and res.data:
+            return res.data.get('vote_type')
+        return None
     except Exception as e:
         import logging
         logging.error(f"Error getting user vote: {e}")

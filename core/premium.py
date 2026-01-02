@@ -31,8 +31,9 @@ def can_use_ai_feature(feature_type: str) -> bool:
     if user_role == 'admin':
         return True
     
-    # Premium users: Check monthly limit from database
-    if user_plan == 'premium' and user_id:
+    # Premium users: Check monthly limit from database (basic/premium/pro)
+    from services.premium_usage_service import has_premium_subscription
+    if has_premium_subscription(user_plan=user_plan) and user_id:
         try:
             from services.premium_usage_service import can_premium_use_ai
             allowed, message = can_premium_use_ai(user_id)
@@ -95,7 +96,8 @@ def log_ai_usage(feature_type: str):
         return
     
     # Premium users: Already tracked in generate_response_with_fallback() - DO NOT track here
-    if user_plan == 'premium':
+    from services.premium_usage_service import has_premium_subscription
+    if has_premium_subscription(user_plan=user_plan):
         return
 
     # Free users: Track in session state
@@ -135,7 +137,8 @@ def show_premium_upsell(feature_name: str, feature_type: str):
     user_plan = user_info.get("plan", "free")
     
     # Premium users: Show monthly limit message if exceeded
-    if user_plan == 'premium' and 'premium_ai_limit_message' in st.session_state:
+    from services.premium_usage_service import has_premium_subscription
+    if has_premium_subscription(user_plan=user_plan) and 'premium_ai_limit_message' in st.session_state:
         st.error(f"🔒 {st.session_state['premium_ai_limit_message']}")
         st.info("💡 Limit sẽ reset vào đầu tháng tới. Hoặc liên hệ admin để được hỗ trợ.")
         del st.session_state['premium_ai_limit_message']  # Clear after showing

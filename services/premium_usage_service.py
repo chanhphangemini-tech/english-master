@@ -33,22 +33,54 @@ def get_premium_tier_warning(tier: str) -> int:
     """Lấy warning threshold cho tier cụ thể"""
     return PREMIUM_TIER_WARNING_THRESHOLDS.get(tier, PREMIUM_TIER_WARNING_THRESHOLDS['premium'])
 
-def get_user_premium_tier(user_id: int) -> str:
-    """Lấy premium tier của user (basic/premium/pro)"""
+def has_premium_subscription(user_id: int = None, user_plan: str = None) -> bool:
+    """
+    Check if user has premium subscription (basic/premium/pro).
+    
+    Args:
+        user_id: User ID (optional, if provided will fetch from DB)
+        user_plan: User plan string (optional, if provided will use directly)
+    
+    Returns:
+        True if user has basic/premium/pro plan, False otherwise
+    """
+    if user_plan:
+        return user_plan.lower() in ('basic', 'premium', 'pro')
+    
     if not supabase or not user_id:
-        return 'premium'  # Default
+        return False
     
     try:
-        res = supabase.table("Users").select("premium_tier, plan").eq("id", int(user_id)).single().execute()
-        if res.data:
+        res = supabase.table("Users").select("plan").eq("id", int(user_id)).maybe_single().execute()
+        if res and hasattr(res, 'data') and res.data:
             plan = res.data.get('plan', 'free')
-            if plan != 'premium':
-                return None  # Not premium user
-            return res.data.get('premium_tier', 'premium')  # Default to 'premium' if null
+            return plan.lower() in ('basic', 'premium', 'pro')
+    except Exception as e:
+        logger.error(f"Error checking premium subscription for user {user_id}: {e}")
+    
+    return False
+
+def get_user_premium_tier(user_id: int) -> Optional[str]:
+    """Lấy premium tier của user (basic/premium/pro)"""
+    if not supabase or not user_id:
+        return None
+    
+    try:
+        res = supabase.table("Users").select("premium_tier, plan").eq("id", int(user_id)).maybe_single().execute()
+        if res and hasattr(res, 'data') and res.data:
+            plan = res.data.get('plan', 'free')
+            # Check if user has premium subscription (basic/premium/pro)
+            if plan.lower() in ('basic', 'premium', 'pro'):
+                # For basic/premium/pro, tier is the plan name or premium_tier
+                tier = res.data.get('premium_tier') or plan.lower()
+                # Ensure tier is valid
+                if tier in ('basic', 'premium', 'pro'):
+                    return tier
+            return None  # Not premium user
     except Exception as e:
         logger.error(f"Error getting premium tier for user {user_id}: {e}")
     
-    return 'premium'  # Default fallback
+    return None
 
 def get_topup_balance(user_id: int) -> int:
     """
