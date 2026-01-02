@@ -87,6 +87,7 @@ def update_user_password(username, new_pass):
 def create_new_user(username, password, name, role, email, plan=None):
     if not supabase: return False, "No DB Connection"
     try:
+        # Check if username already exists
         res = supabase.table("Users").select("username").eq("username", username).execute()
         if res.data:
             return False, "Username already exists!"
@@ -96,6 +97,28 @@ def create_new_user(username, password, name, role, email, plan=None):
 
         hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
         
+        # Try using RPC function first (bypasses RLS)
+        try:
+            result = supabase.rpc('register_user', {
+                'p_username': username,
+                'p_password': hashed,
+                'p_name': name,
+                'p_email': email,
+                'p_role': role,
+                'p_plan': plan
+            }).execute()
+            
+            if result.data and result.data.get('success'):
+                return True, result.data.get('message', 'Account created successfully!')
+            else:
+                error_msg = result.data.get('message', 'Registration failed') if result.data else 'Registration failed'
+                # Fall back to direct insert
+                logger.warning(f"RPC registration failed: {error_msg}, trying direct insert")
+        except Exception as rpc_error:
+            # If RPC fails, fall back to direct insert
+            logger.warning(f"RPC function not available or failed: {rpc_error}, trying direct insert")
+        
+        # Fallback: Direct insert (will use RLS policies)
         supabase.table("Users").insert({
             "username": username,
             "password": hashed,
