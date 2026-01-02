@@ -75,6 +75,26 @@ def get_email_by_username(username):
         logger.error(f"Get email error: {e}")
     return None
 
+def check_username_exists(username):
+    """Kiểm tra xem username đã tồn tại chưa"""
+    if not supabase: return False
+    try:
+        res = supabase.table("Users").select("username").eq("username", username).limit(1).execute()
+        return len(res.data) > 0
+    except Exception as e:
+        logger.error(f"Error checking username: {e}")
+        return False
+
+def check_email_exists(email):
+    """Kiểm tra xem email đã tồn tại chưa"""
+    if not supabase: return False
+    try:
+        res = supabase.table("Users").select("email").eq("email", email).limit(1).execute()
+        return len(res.data) > 0
+    except Exception as e:
+        logger.error(f"Error checking email: {e}")
+        return False
+
 def update_user_password(username, new_pass):
     if not supabase: return False, "No DB"
     try:
