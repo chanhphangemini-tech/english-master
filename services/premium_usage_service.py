@@ -348,7 +348,7 @@ def purchase_ai_topup(user_id: int, amount: int, price_vnd: int) -> Tuple[bool, 
         vn_tz = pytz.timezone('Asia/Ho_Chi_Minh')
         now_vn = datetime.now(vn_tz)
         
-        if user_plan == 'premium':
+        if user_plan.lower() in ('basic', 'premium', 'pro'):
             # Premium users: Top-up expires at end of current month
             if now_vn.month == 12:
                 last_day = datetime(now_vn.year + 1, 1, 1, 23, 59, 59, tzinfo=vn_tz) - timedelta(seconds=1)
@@ -416,13 +416,18 @@ def get_all_premium_users_usage(month: Optional[datetime] = None) -> list:
         
         now = get_vn_now_utc()
         
-        # Lấy tất cả Premium users
-        users_result = supabase.table("Users").select("id, username, name, premium_tier").eq("plan", "premium").execute()
+        # Lấy tất cả Premium users (basic/premium/pro)
+        users_result = supabase.table("Users").select("id, username, name, premium_tier, plan").in_("plan", ["basic", "premium", "pro"]).execute()
         
         usage_list = []
         for user in users_result.data:
             user_id = user['id']
-            tier = user.get('premium_tier', 'premium')
+            plan = user.get('plan', 'premium')
+            # Tier is premium_tier or plan name
+            tier = user.get('premium_tier') or plan.lower()
+            # Ensure tier is valid
+            if tier not in ('basic', 'premium', 'pro'):
+                tier = plan.lower() if plan.lower() in ('basic', 'premium', 'pro') else 'premium'
             limit = get_premium_tier_limit(tier)
             
             # Đếm AI calls trong tháng

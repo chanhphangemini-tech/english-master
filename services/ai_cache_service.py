@@ -103,7 +103,11 @@ def cache_response(prompt: str, response: Any, feature_type: str = 'general') ->
         
         return True
     except Exception as e:
-        logger.warning(f"Failed to cache response: {e}")
+        # Log error but don't fail - caching is not critical
+        error_msg = str(e)
+        # Only log if it's not an RLS error (to reduce noise)
+        if 'row-level security' not in error_msg.lower() and '42501' not in error_msg:
+            logger.warning(f"Failed to cache response: {e}")
         return False
 
 def clear_old_cache(days_old: int = 30) -> int:
