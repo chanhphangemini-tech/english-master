@@ -103,34 +103,25 @@ def render_auth_page():
                 st.markdown("---")
                 st.markdown("###### Chọn gói dịch vụ:")
                 
-                # Plan options with disabled plans
-                plan_options = [
-                    "Free (Miễn phí)",
-                    "Premium (Trả phí - 600 lượt/tháng) ✅",
-                    "Basic (300 lượt/tháng) ⏳ Đang cập nhật",
-                    "Pro (1200 lượt/tháng) ⏳ Đang cập nhật"
-                ]
-                plan_option = st.radio("Gói:", plan_options, label_visibility="collapsed")
-                
-                # Determine plan
-                if "Premium" in plan_option and "✅" in plan_option:
-                    reg_plan = "premium"
-                elif "Basic" in plan_option or "Pro" in plan_option:
-                    st.warning("⚠️ Gói này đang được cập nhật. Vui lòng chọn gói Free hoặc Premium.")
-                    reg_plan = None
-                else:
-                    reg_plan = "free"
+                # Only show available plans (Free and Premium)
+                plan_option = st.radio(
+                    "Gói:", 
+                    ["Free (Miễn phí)", "Premium (Trả phí - 600 lượt/tháng)"], 
+                    label_visibility="collapsed"
+                )
+                reg_plan = "premium" if "Premium" in plan_option else "free"
                 
                 if reg_plan == "premium":
                     st.caption("💡 Gói Premium: 600 lượt AI/tháng - Liên hệ Admin để đăng ký")
-                elif reg_plan == "free":
+                else:
                     st.caption("💡 Gói Free: 5 lượt AI/ngày - Miễn phí")
+                
+                # Show disabled plans info
+                st.info("ℹ️ **Gói Basic** (300 lượt/tháng) và **Gói Pro** (1200 lượt/tháng) đang được cập nhật. Sẽ sớm có mặt sau khi triển khai phương thức thanh toán.")
                 
                 if st.form_submit_button("Đăng ký", type="primary"):
                     if not all([reg_name, reg_email, reg_user, reg_pass]):
                         st.warning("Vui lòng điền đầy đủ thông tin.")
-                    elif reg_plan is None:
-                        st.warning("⚠️ Vui lòng chọn gói Free hoặc Premium (các gói khác đang được cập nhật).")
                     else:
                         ok, msg = create_new_user(reg_user, reg_pass, reg_name, reg_role, reg_email, plan=reg_plan)
                         if ok:
