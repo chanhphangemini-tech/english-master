@@ -12,6 +12,7 @@ plotly>=5.18.0
 gtts>=2.5.0
 pydub>=0.25.1
 SpeechRecognition>=3.10.0
+edge-tts>=6.1.0
 
 # AI/ML
 google-genai>=0.2.0
