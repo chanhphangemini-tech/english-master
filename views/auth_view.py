@@ -239,3 +239,5 @@ def render_auth_page():
             </tbody>
         </table>
         """, unsafe_allow_html=True)
+        
+        st.caption("ℹ️ **Lưu ý:** Gói **Free** đang có sẵn để đăng ký. Các gói **Basic** (300 lượt/tháng), **Premium** (600 lượt/tháng) và **Pro** (1200 lượt/tháng) đang được cập nhật và sẽ sớm có mặt sau khi triển khai phương thức thanh toán. Admin có thể nâng cấp tài khoản thủ công.")
