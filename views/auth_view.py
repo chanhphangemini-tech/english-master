@@ -35,13 +35,8 @@ def render_auth_page():
                             if active_theme: st.session_state.active_theme_value = active_theme
                         except: pass
                         
-                        # Pre-load vocabulary data in background for faster page loads
-                        try:
-                            from core.vocab_preloader import preload_vocabulary_data
-                            preload_vocabulary_data()
-                        except Exception as e:
-                            # Silent fail - preload is not critical
-                            pass
+                        # Note: Vocabulary preloading is now deferred until first access
+                        # to avoid blocking login. It will be loaded on-demand when needed.
                         
                         st.rerun()
                     else:

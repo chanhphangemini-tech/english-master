@@ -101,14 +101,21 @@ def clear_all_caches():
         if key.startswith('cache_') and (key.endswith('_entry') or key.endswith('_timestamp'))
     ]
     
-    # Also clear sidebar stats cache and vocabulary preload
+    # Also clear sidebar stats cache, vocabulary preload, and feature flags cache
     keys_to_remove.extend([
         key for key in st.session_state.keys()
-        if key.startswith('sidebar_stats_') or key.startswith('preloaded_vocab') or key.startswith('vocab_')
+        if key.startswith('sidebar_stats_') or key.startswith('preloaded_vocab') or key.startswith('vocab_') or key.startswith('feature_flags')
     ])
     
     for key in keys_to_remove:
         del st.session_state[key]
+    
+    # Also clear feature flags cache using the service function
+    try:
+        from services.feature_flag_service import clear_feature_flags_cache
+        clear_feature_flags_cache()
+    except Exception:
+        pass  # Ignore errors during cleanup
     
     logger.info(f"Cleared {len(keys_to_remove)} cache entries")
 

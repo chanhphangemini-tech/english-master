@@ -21,6 +21,9 @@ def preload_vocabulary_data(force_reload: bool = False) -> None:
     Pre-load vocabulary data vào session_state.
     Chỉ load một lần, sau đó reuse từ cache.
     
+    NOTE: This function is now called on-demand (lazy loading) rather than 
+    blocking during login for better performance.
+    
     Args:
         force_reload: Nếu True, force reload ngay cả khi đã có data
     """
