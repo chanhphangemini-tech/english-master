@@ -1,7 +1,7 @@
 import streamlit as st
 import time
 import secrets
-from core.auth import check_login, get_email_by_username, update_user_password, create_new_user
+from core.auth import check_login, get_email_by_username, update_user_password, create_new_user, check_username_exists, check_email_exists
 from services.shop_service import get_user_inventory
 from core.email import send_otp_email
 
@@ -128,32 +128,13 @@ def render_auth_page():
                     
                     # Check username and email uniqueness (only if form is filled)
                     if reg_user and reg_email and not errors:
-                        from core.auth import check_login, get_email_by_username
                         # Check username
-                        try:
-                            test_user = check_login(reg_user, "dummy_password_to_check_existence")
-                            if test_user or get_email_by_username(reg_user):
-                                errors.append(f"Tên đăng nhập '{reg_user}' đã được sử dụng. Vui lòng chọn tên khác.")
-                        except:
-                            # If check fails, try direct query
-                            try:
-                                from core.database import supabase
-                                if supabase:
-                                    user_check = supabase.table("Users").select("username").eq("username", reg_user).execute()
-                                    if user_check.data:
-                                        errors.append(f"Tên đăng nhập '{reg_user}' đã được sử dụng. Vui lòng chọn tên khác.")
-                            except:
-                                pass
+                        if check_username_exists(reg_user):
+                            errors.append(f"Tên đăng nhập '{reg_user}' đã được sử dụng. Vui lòng chọn tên khác.")
                         
                         # Check email
-                        try:
-                            from core.database import supabase
-                            if supabase:
-                                email_check = supabase.table("Users").select("email").eq("email", reg_email).execute()
-                                if email_check.data:
-                                    errors.append(f"Email '{reg_email}' đã được sử dụng. Vui lòng sử dụng email khác hoặc đăng nhập.")
-                        except:
-                            pass
+                        if check_email_exists(reg_email):
+                            errors.append(f"Email '{reg_email}' đã được sử dụng. Vui lòng sử dụng email khác hoặc đăng nhập.")
                     
                     if errors:
                         for error in errors:
