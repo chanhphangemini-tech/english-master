@@ -285,25 +285,76 @@ def admin_update_user_comprehensive(
         
         # Execute update if there are changes
         if update_data:
-            supabase.table("Users").update(update_data).eq("id", user_id).execute()
-            
-            # Log admin action
+            # Try RPC function first (bypasses RLS)
             try:
-                from core.security_monitor import SecurityMonitor
-                if admin_id:
-                    SecurityMonitor.log_user_action(
-                        admin_id,
-                        'admin_user_update',
-                        success=True,
-                        metadata={
-                            'target_user_id': user_id,
-                            'target_username': current_user.get('username'),
-                            'changes': changes_log,
-                            'updated_fields': list(update_data.keys())
-                        }
-                    )
-            except Exception as log_error:
-                logger.warning(f"Error logging admin action: {log_error}")
+                rpc_result = supabase.rpc("admin_update_user", {
+                    "p_user_id": user_id,
+                    "p_name": update_data.get('name'),
+                    "p_email": update_data.get('email'),
+                    "p_role": update_data.get('role'),
+                    "p_plan": update_data.get('plan'),
+                    "p_premium_tier": update_data.get('premium_tier'),
+                    "p_password": update_data.get('password'),
+                    "p_coins": update_data.get('coins'),
+                    "p_current_streak": update_data.get('current_streak'),
+                    "p_status": update_data.get('status'),
+                    "p_admin_user_id": admin_id
+                }).execute()
+                
+                if rpc_result.data:
+                    result_text = str(rpc_result.data) if not isinstance(rpc_result.data, str) else rpc_result.data
+                    if result_text.startswith('SUCCESS:'):
+                        # Log admin action
+                        try:
+                            from core.security_monitor import SecurityMonitor
+                            if admin_id:
+                                SecurityMonitor.log_user_action(
+                                    admin_id,
+                                    'admin_user_update',
+                                    success=True,
+                                    metadata={
+                                        'target_user_id': user_id,
+                                        'target_username': current_user.get('username'),
+                                        'changes': changes_log,
+                                        'updated_fields': list(update_data.keys())
+                                    }
+                                )
+                        except Exception as log_error:
+                            logger.warning(f"Error logging admin action: {log_error}")
+                        
+                        return True, f"✅ Đã cập nhật: {result_text.replace('SUCCESS:', '')}"
+                    elif result_text.startswith('ERROR:'):
+                        error_msg = result_text.replace('ERROR:', '')
+                        logger.error(f"RPC admin_update_user error: {error_msg}")
+                        return False, f"Lỗi: {error_msg}"
+            except Exception as rpc_error:
+                logger.warning(f"RPC admin_update_user failed, trying direct update: {rpc_error}")
+                # Fallback to direct update (may fail due to RLS)
+                try:
+                    supabase.table("Users").update(update_data).eq("id", user_id).execute()
+                    
+                    # Log admin action
+                    try:
+                        from core.security_monitor import SecurityMonitor
+                        if admin_id:
+                            SecurityMonitor.log_user_action(
+                                admin_id,
+                                'admin_user_update',
+                                success=True,
+                                metadata={
+                                    'target_user_id': user_id,
+                                    'target_username': current_user.get('username'),
+                                    'changes': changes_log,
+                                    'updated_fields': list(update_data.keys())
+                                }
+                            )
+                    except Exception as log_error:
+                        logger.warning(f"Error logging admin action: {log_error}")
+                    
+                    return True, f"✅ Đã cập nhật {len(changes_log)} thay đổi: {', '.join(changes_log)}"
+                except Exception as direct_error:
+                    logger.error(f"Direct update also failed: {direct_error}")
+                    return False, f"Lỗi: Không thể cập nhật user. Có thể do RLS policy. {str(direct_error)}"
             
             return True, f"✅ Đã cập nhật {len(changes_log)} thay đổi: {', '.join(changes_log)}"
         else:
