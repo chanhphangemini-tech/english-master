@@ -1,0 +1,31 @@
+# Core Dependencies
+streamlit>=1.32.0
+supabase>=2.3.0
+python-dotenv>=1.0.0
+
+# Data Processing
+pandas>=2.2.0
+numpy>=1.26.0
+plotly>=5.18.0
+
+# Audio Processing
+gtts>=2.5.0
+pydub>=0.25.1
+SpeechRecognition>=3.10.0
+
+# AI/ML
+google-genai>=0.2.0
+
+# Web & HTTP
+requests>=2.31.0
+
+# Utilities
+Pillow>=10.2.0
+email-validator>=2.1.0
+streamlit-cropper>=0.1.2
+
+# Testing (optional, only for development)
+# pytest>=7.4.0
+# pytest-cov>=4.1.0
+# pytest-mock>=3.12.0
+

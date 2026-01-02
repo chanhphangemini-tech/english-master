@@ -1,0 +1,236 @@
+import streamlit as st
+import time
+import secrets
+from core.auth import check_login, get_email_by_username, update_user_password, create_new_user
+from services.shop_service import get_user_inventory
+from core.email import send_otp_email
+
+def render_auth_page():
+    """Hiển thị trang xác thực (Đăng nhập / Đăng ký / Quên mật khẩu)"""
+    
+    # Ẩn sidebar khi ở màn hình login
+    if not st.session_state.get('logged_in', False):
+        st.markdown("""<style>section[data-testid="stSidebar"] {display: none !important;}</style>""", unsafe_allow_html=True)
+
+    left_col, right_col = st.columns([1, 1.2], gap="large")
+
+    with left_col:
+        if st.session_state.auth_mode == 'login':
+            st.markdown("<h1 style='text-align: center; color: #003366;'>English Master</h1>", unsafe_allow_html=True)
+            st.caption("Hệ thống học tập thông minh All-in-One")
+            
+            with st.form("login_form"):
+                u = st.text_input("Tên đăng nhập", autocomplete="username")
+                p = st.text_input("Mật khẩu", type="password", autocomplete="current-password")
+                if st.form_submit_button("Đăng nhập", type="primary"):
+                    user = check_login(u, p)
+                    if user == "LOCKED":
+                        st.error("Tài khoản đã bị khóa.")
+                    elif user:
+                        st.session_state.logged_in = True
+                        st.session_state.user_info = user
+                        try:
+                            inv = get_user_inventory(user['id'])
+                            active_theme = next((item['ShopItems']['value'] for item in inv if item.get('is_active') and item.get('ShopItems')), None)
+                            if active_theme: st.session_state.active_theme_value = active_theme
+                        except: pass
+                        
+                        # Pre-load vocabulary data in background for faster page loads
+                        try:
+                            from core.vocab_preloader import preload_vocabulary_data
+                            preload_vocabulary_data()
+                        except Exception as e:
+                            # Silent fail - preload is not critical
+                            pass
+                        
+                        st.rerun()
+                    else:
+                        st.error("Sai tên đăng nhập hoặc mật khẩu.")
+            
+            if st.button("Quên mật khẩu?", type="tertiary"):
+                st.session_state.auth_mode = 'forgot'
+                st.rerun()
+            if st.button("Chưa có tài khoản? Đăng ký ngay", type="secondary"):
+                st.session_state.auth_mode = 'register'
+                st.rerun()
+
+        elif st.session_state.auth_mode == 'forgot':
+            st.subheader("Khôi phục mật khẩu")
+            if 'otp_step' not in st.session_state: st.session_state.otp_step = 1
+            
+            if st.session_state.otp_step == 1:
+                u_reset = st.text_input("Nhập tên đăng nhập:", autocomplete="username")
+                if st.button("Gửi mã OTP"):
+                    email = get_email_by_username(u_reset)
+                    if email:
+                        otp = str(secrets.randbelow(900000) + 100000)
+                        send_otp_email(email, otp)
+                        st.session_state.otp_gen = otp
+                        st.session_state.reset_u = u_reset
+                        st.session_state.otp_step = 2
+                        st.success("Đã gửi mã OTP!")
+                        time.sleep(1)
+                        st.rerun()
+                    else:
+                        st.error("Không tìm thấy tài khoản.")
+                if st.button("Quay lại"):
+                    st.session_state.auth_mode = 'login'
+                    st.rerun()
+            
+            elif st.session_state.otp_step == 2:
+                otp_in = st.text_input("Nhập mã OTP:", autocomplete="one-time-code")
+                new_p = st.text_input("Mật khẩu mới:", type="password", autocomplete="new-password")
+                if st.button("Xác nhận đổi"):
+                    if otp_in == st.session_state.otp_gen:
+                        update_user_password(st.session_state.reset_u, new_p)
+                        st.success("Đổi mật khẩu thành công!")
+                        st.session_state.auth_mode = 'login'
+                        time.sleep(2)
+                        st.rerun()
+                    else:
+                        st.error("Sai mã OTP.")
+
+        elif st.session_state.auth_mode == 'register':
+            st.subheader("Tạo tài khoản mới")
+            with st.form("register_form"):
+                reg_name = st.text_input("Họ và tên*")
+                reg_email = st.text_input("Email*")
+                reg_user = st.text_input("Tên đăng nhập*")
+                reg_pass = st.text_input("Mật khẩu*", type="password")
+                
+                reg_role = "user"
+
+                st.markdown("---")
+                st.markdown("###### Chọn gói dịch vụ:")
+                plan_option = st.radio("Gói:", ["Free (Miễn phí)", "Premium (Trả phí - 600 lượt/tháng)"], label_visibility="collapsed")
+                reg_plan = "premium" if "Premium" in plan_option else "free"
+                if "Premium" in plan_option:
+                    st.caption("💡 Liên hệ Admin để chọn gói Basic (300 lượt) hoặc Pro (1200 lượt)")
+                
+                if st.form_submit_button("Đăng ký", type="primary"):
+                    if not all([reg_name, reg_email, reg_user, reg_pass]):
+                        st.warning("Vui lòng điền đầy đủ thông tin.")
+                    else:
+                        ok, msg = create_new_user(reg_user, reg_pass, reg_name, reg_role, reg_email, plan=reg_plan)
+                        if ok:
+                            st.success(f"Đăng ký thành công gói {reg_plan.upper()}! Vui lòng đăng nhập.")
+                            st.session_state.auth_mode = 'login'
+                            time.sleep(2)
+                            st.rerun()
+                        else:
+                            st.error(f"Lỗi: {msg}")
+            if st.button("Đã có tài khoản? Đăng nhập"):
+                st.session_state.auth_mode = 'login'
+                st.rerun()
+
+    with right_col:
+        st.markdown("## Nâng Tầm Tiếng Anh Của Bạn")
+        st.markdown("**English Master** không chỉ là một ứng dụng học từ vựng, mà là một hệ sinh thái toàn diện giúp bạn chinh phục tiếng Anh một cách hiệu quả và thú vị.")
+        
+        st.markdown("""
+        <div class="feature-item">
+            <span class="feature-icon">🧠</span>
+            <span>Học từ vựng thông minh với thuật toán **Lặp lại ngắt quãng (SRS)**.</span>
+        </div>
+        <div class="feature-item">
+            <span class="feature-icon">🤖</span>
+            <span>Luyện 4 kỹ năng Nghe-Nói-Đọc-Viết với **phản hồi tức thì từ AI**.</span>
+        </div>
+        <div class="feature-item">
+            <span class="feature-icon">🎮</span>
+            <span>Hệ thống **Gamification** (Streak, Coin, PvP) tạo động lực mỗi ngày.</span>
+        </div>
+        <div class="feature-item">
+            <span class="feature-icon">🎯</span>
+            <span>**Kiểm tra đầu vào** và nhận lộ trình học tập cá nhân hóa.</span>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.divider()
+
+        st.markdown("### So Sánh Gói Dịch Vụ")
+        
+        st.markdown("""
+        <style>
+        .comp-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 0.9em; }
+        .comp-table th, .comp-table td { padding: 10px 8px; text-align: left; border-bottom: 1px solid #eee; }
+        .comp-table th { background-color: #f8f9fa; color: #333; font-weight: bold; text-align: center; }
+        .comp-table td.check { color: #2ecc71; font-weight: bold; text-align: center; }
+        .comp-table td.cross { color: #e74c3c; text-align: center; }
+        .comp-table td.center { text-align: center; }
+        .comp-table tr:hover { background-color: #f1f1f1; }
+        .comp-table .tier-basic { color: #3498db; font-weight: bold; }
+        .comp-table .tier-premium { color: #d35400; font-weight: bold; }
+        .comp-table .tier-pro { color: #9b59b6; font-weight: bold; }
+        </style>
+        
+        <table class="comp-table">
+            <thead>
+                <tr>
+                    <th style="width: 25%;">Tính năng</th>
+                    <th style="width: 18.75%;">Free</th>
+                    <th style="width: 18.75%;" class="tier-basic">Basic</th>
+                    <th style="width: 18.75%;" class="tier-premium">Premium</th>
+                    <th style="width: 18.75%;" class="tier-pro">Pro</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>📚 Học từ vựng (SRS)</td>
+                    <td class="center">20 từ/ngày</td>
+                    <td class="check">♾️ Không giới hạn</td>
+                    <td class="check">♾️ Không giới hạn</td>
+                    <td class="check">♾️ Không giới hạn</td>
+                </tr>
+                <tr>
+                    <td>🤖 Luyện kỹ năng AI</td>
+                    <td class="center">5 lượt/ngày</td>
+                    <td class="center">300 lượt/tháng</td>
+                    <td class="center">600 lượt/tháng</td>
+                    <td class="center">1200 lượt/tháng</td>
+                </tr>
+                <tr>
+                    <td>⚡ Mua thêm lượt AI (Top-up)</td>
+                    <td class="check">✅</td>
+                    <td class="check">✅</td>
+                    <td class="check">✅</td>
+                    <td class="check">✅</td>
+                </tr>
+                <tr>
+                    <td>🧪 Bài học Ngữ pháp</td>
+                    <td class="center">Chỉ A1, A2</td>
+                    <td class="check">🔓 A1-C2</td>
+                    <td class="check">🔓 A1-C2</td>
+                    <td class="check">🔓 A1-C2</td>
+                </tr>
+                <tr>
+                    <td>🎯 Kiểm tra lại trình độ</td>
+                    <td class="cross">❌</td>
+                    <td class="check">✅</td>
+                    <td class="check">✅</td>
+                    <td class="check">✅</td>
+                </tr>
+                <tr>
+                    <td>📊 Xuất dữ liệu (CSV/Excel)</td>
+                    <td class="cross">❌</td>
+                    <td class="check">✅</td>
+                    <td class="check">✅</td>
+                    <td class="check">✅</td>
+                </tr>
+                <tr>
+                    <td>💎 Khung Avatar & Danh hiệu VIP</td>
+                    <td class="cross">❌</td>
+                    <td class="check">✅</td>
+                    <td class="check">✅</td>
+                    <td class="check">✅</td>
+                </tr>
+                <tr>
+                    <td>🚫 Quảng cáo</td>
+                    <td class="center">Có thể có</td>
+                    <td class="check">✅ Không quảng cáo</td>
+                    <td class="check">✅ Không quảng cáo</td>
+                    <td class="check">✅ Không quảng cáo</td>
+                </tr>
+            </tbody>
+        </table>
+        """, unsafe_allow_html=True)

@@ -1,0 +1,79 @@
+# Python
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+*.whl
+
+# Virtual Environment
+venv/
+env/
+.venv/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+.vs/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Streamlit
+.streamlit/secrets.toml
+.streamlit/config.toml
+
+# Gemini cache
+.gemini/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+*.cover
+.hypothesis/
+
+# Environment variables
+.env
+.env.local
+
+# Logs
+*.log
+logs/
+
+# Database
+*.db
+*.sqlite3
+*.sqlite
+
+# Backup files
+*.bak
+backup/
+backups/
+backup_data/
+*_backup/
+
+# OS
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Project specific
+temp/
+*.tmp
+test_keys.py
+
+# Local scripts (optional - remove if you want to share)
+# deploy.bat
+# force_push.bat
+
+# Documentation you may not want to share (optional)
+# CLEANUP_REPORT.md
+# FINAL_CLEANUP_SUMMARY.md
+
