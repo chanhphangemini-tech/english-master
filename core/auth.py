@@ -178,12 +178,47 @@ def refresh_user_info(user_id=None):
         return False
 
 def update_user_password(username, new_pass):
+    """Update user password (admin function - no verification)."""
     if not supabase: return False, "No DB"
     try:
         hashed = bcrypt.hashpw(new_pass.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
         supabase.table("Users").update({"password": hashed}).eq("username", username).execute()
         return True, "Success"
     except Exception as e:
+        return False, str(e)
+
+def change_password(username, old_pass, new_pass):
+    """Change user password with old password verification."""
+    if not supabase: 
+        return False, "No DB Connection"
+    
+    try:
+        # Get current user password
+        user_res = supabase.table("Users").select("password").eq("username", username).execute()
+        if not user_res.data:
+            return False, "User not found"
+        
+        db_pass = str(user_res.data[0].get('password', ''))
+        
+        # Verify old password
+        if db_pass.startswith('$2') and len(db_pass) >= 60:
+            # Bcrypt hash
+            password_bytes = old_pass.encode('utf-8')
+            hash_bytes = db_pass.encode('utf-8')
+            is_valid = bcrypt.checkpw(password_bytes, hash_bytes)
+            if not is_valid:
+                return False, "Mật khẩu cũ không đúng"
+        else:
+            # Legacy plain text
+            if db_pass != old_pass:
+                return False, "Mật khẩu cũ không đúng"
+        
+        # Hash new password and update
+        hashed = bcrypt.hashpw(new_pass.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        supabase.table("Users").update({"password": hashed}).eq("username", username).execute()
+        return True, "Đổi mật khẩu thành công"
+    except Exception as e:
+        logger.error(f"Change password error: {e}")
         return False, str(e)
 
 def create_new_user(username, password, name, role, email, plan=None):
@@ -248,13 +283,35 @@ def create_new_user(username, password, name, role, email, plan=None):
         return False, str(e)
 
 def update_user_avatar(username, avatar_file):
-    if not supabase: return False, "No DB"
+    """Legacy function - use upload_and_update_avatar instead."""
+    return upload_and_update_avatar(username, avatar_file, None)
+
+def upload_and_update_avatar(username, uploaded_file, crop_box=None):
+    """Upload avatar image to storage and update user avatar_url."""
+    if not supabase: 
+        return False, "No DB Connection"
+    
     try:
-        img = Image.open(avatar_file)
+        # Get user_id from username
+        user_res = supabase.table("Users").select("id").eq("username", username).execute()
+        if not user_res.data:
+            return False, "User not found"
+        
+        user_id = user_res.data[0]['id']
+        
+        # Process image
+        img = Image.open(uploaded_file)
+        
+        # Apply crop if provided
+        if crop_box:
+            x, y, w, h = crop_box
+            img = img.crop((x, y, x + w, y + h))
+        
+        # Convert and resize
         img = img.convert('RGB')
         img = img.resize((200, 200), Image.Resampling.LANCZOS)
         
-        # Lưu vào bytes
+        # Save to bytes
         img_byte_arr = io.BytesIO()
         img.save(img_byte_arr, format='PNG', optimize=True)
         img_bytes = img_byte_arr.getvalue()
@@ -262,13 +319,51 @@ def update_user_avatar(username, avatar_file):
         file_path = f"avatar_{username}_{int(time.time())}.png"
         bucket_name = "avatars"
         
-        supabase.storage.from_(bucket_name).upload(file_path, img_bytes, {"content-type": "image/png"})
-        public_url = supabase.storage.from_(bucket_name).get_public_url(file_path)
+        # Upload to storage (this may still fail due to Storage RLS, but we'll handle it)
+        try:
+            supabase.storage.from_(bucket_name).upload(
+                file_path, 
+                img_bytes, 
+                {"content-type": "image/png", "upsert": "true"}
+            )
+            public_url = supabase.storage.from_(bucket_name).get_public_url(file_path)
+        except Exception as storage_error:
+            logger.error(f"Storage upload error: {storage_error}")
+            # If storage upload fails, we can't continue
+            return False, f"Lỗi upload ảnh: {str(storage_error)}"
         
-        supabase.table("Users").update({"avatar_url": public_url}).eq("username", username).execute()
-        return True, public_url
+        # Update avatar_url using RPC function (bypasses RLS)
+        try:
+            rpc_result = supabase.rpc("update_user_avatar_url", {
+                "p_user_id": user_id,
+                "p_avatar_url": public_url
+            }).execute()
+            
+            if rpc_result.data:
+                result_text = str(rpc_result.data) if not isinstance(rpc_result.data, str) else rpc_result.data
+                if result_text.startswith('SUCCESS:'):
+                    logger.info(f"Avatar updated successfully for user {username} via RPC")
+                    return True, public_url
+                elif result_text.startswith('ERROR:'):
+                    error_msg = result_text.replace('ERROR:', '')
+                    logger.error(f"RPC update_user_avatar_url error: {error_msg}")
+                    return False, error_msg
+        except Exception as rpc_error:
+            logger.warning(f"RPC update_user_avatar_url failed, trying direct update: {rpc_error}")
+            # Fallback: Try direct update (may fail due to RLS)
+            try:
+                supabase.table("Users").update({"avatar_url": public_url}).eq("username", username).execute()
+                logger.info(f"Avatar updated successfully for user {username} via direct update")
+                return True, public_url
+            except Exception as direct_error:
+                logger.error(f"Direct update also failed: {direct_error}")
+                return False, f"Lỗi cập nhật avatar: {str(direct_error)}"
+        
+        return False, "Lỗi không xác định khi cập nhật avatar"
     except Exception as e:
         logger.error(f"Avatar upload error: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return False, str(e)
 
 def get_user_settings(username):
