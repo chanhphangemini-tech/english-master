@@ -22,7 +22,7 @@ from views.dictionary_view import (
 st.set_page_config(page_title="Kho Từ Vựng | English Master", page_icon="📚", layout="wide")
 
 if not st.session_state.get('logged_in'):
-    st.switch_page("Home.py")
+    st.switch_page("home.py")
 
 apply_page_theme()  # Apply theme + sidebar + auth
 

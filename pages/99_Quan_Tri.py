@@ -25,7 +25,7 @@ from pages.admin_shop_helpers import (
 # --- Auth Check ---
 if 'logged_in' not in st.session_state or not st.session_state.logged_in:
     st.error("🔒 Vui lòng đăng nhập để truy cập.")
-    st.switch_page("Home.py") 
+    st.switch_page("home.py") 
     st.stop()
 elif str(st.session_state.user_info.get('role')).lower() != 'admin':
     st.error("⛔ Bạn không có quyền truy cập khu vực này!")

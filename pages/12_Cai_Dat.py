@@ -12,7 +12,7 @@ from views.settings_view import (
 
 # --- Auth Check ---
 if not st.session_state.get("logged_in"):
-    st.switch_page("Home.py")
+    st.switch_page("home.py")
 
 apply_page_theme()  # Apply theme + sidebar + auth
 

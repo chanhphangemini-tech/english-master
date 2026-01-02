@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 # --- AUTH CHECK ---
 if not st.session_state.get("logged_in"):
-    st.switch_page("Home.py")
+    st.switch_page("home.py")
 
 apply_page_theme()  # Apply theme + sidebar + auth
 user_id: int = st.session_state.user_info.get("id")

@@ -10,7 +10,7 @@ apply_page_theme()  # Apply theme + sidebar + auth
 # --- Auth Check ---
 if 'logged_in' not in st.session_state or not st.session_state.logged_in:
     st.error("🔒 Vui lòng đăng nhập để truy cập.")
-    st.switch_page("Home.py")
+    st.switch_page("home.py")
     st.stop()
 
 # Check Premium status

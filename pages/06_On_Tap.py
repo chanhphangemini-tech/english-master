@@ -33,7 +33,7 @@ st.set_page_config(page_title="Học & Ôn Tập | English Master", page_icon="�
 apply_vocab_card_styles()
 
 if not st.session_state.get('logged_in'):
-    st.switch_page("Home.py")
+    st.switch_page("home.py")
 
 apply_page_theme()  # Apply theme + sidebar + auth
 
