@@ -92,71 +92,145 @@ def render_auth_page():
 
         elif st.session_state.auth_mode == 'register':
             st.subheader("Tạo tài khoản mới")
-            with st.form("register_form"):
-                reg_name = st.text_input("Họ và tên*")
-                reg_email = st.text_input("Email*")
-                reg_user = st.text_input("Tên đăng nhập*")
-                reg_pass = st.text_input("Mật khẩu*", type="password", help="Mật khẩu phải có ít nhất 6 ký tự, bao gồm chữ cái và số")
-                
-                # Password requirements note
-                st.caption("🔒 **Yêu cầu mật khẩu:** Tối thiểu 6 ký tự, khuyến nghị bao gồm chữ cái và số để bảo mật tốt hơn")
-                
-                reg_role = "user"
+            
+            # OTP step management
+            if 'otp_step' not in st.session_state:
+                st.session_state.otp_step = 1
+                st.session_state.reg_data = {}
+            
+            if st.session_state.otp_step == 1:
+                # Step 1: Registration form
+                with st.form("register_form"):
+                    reg_name = st.text_input("Họ và tên*")
+                    reg_email = st.text_input("Email*")
+                    reg_user = st.text_input("Tên đăng nhập*")
+                    reg_pass = st.text_input("Mật khẩu*", type="password", help="Mật khẩu phải có ít nhất 6 ký tự, bao gồm chữ cái và số")
+                    
+                    # Password requirements note
+                    st.caption("🔒 **Yêu cầu mật khẩu:** Tối thiểu 6 ký tự, khuyến nghị bao gồm chữ cái và số để bảo mật tốt hơn")
+                    
+                    reg_role = "user"
 
-                st.markdown("---")
-                st.markdown("###### Gói dịch vụ:")
-                
-                # Only Free plan is available (all paid plans disabled until payment gateway is ready)
-                st.markdown("**Free (Miễn phí)** - 5 lượt AI/ngày")
-                st.caption("💡 Gói Free: Miễn phí, phù hợp cho người mới bắt đầu")
-                
-                reg_plan = "free"  # Force Free plan only
-                
-                # Show disabled plans info
-                st.info("ℹ️ **Gói Basic** (300 lượt/tháng), **Gói Premium** (600 lượt/tháng) và **Gói Pro** (1200 lượt/tháng) đang được cập nhật. Sẽ sớm có mặt sau khi triển khai phương thức thanh toán. Admin có thể nâng cấp tài khoản thủ công.")
-                
-                if st.form_submit_button("Đăng ký", type="primary"):
-                    # Validation
-                    errors = []
+                    st.markdown("---")
+                    st.markdown("###### Gói dịch vụ:")
                     
-                    if not all([reg_name, reg_email, reg_user, reg_pass]):
-                        errors.append("Vui lòng điền đầy đủ thông tin.")
+                    # Only Free plan is available (all paid plans disabled until payment gateway is ready)
+                    st.markdown("**Free (Miễn phí)** - 5 lượt AI/ngày")
+                    st.caption("💡 Gói Free: Miễn phí, phù hợp cho người mới bắt đầu")
                     
-                    # Password validation
-                    if reg_pass and len(reg_pass) < 6:
-                        errors.append("Mật khẩu phải có ít nhất 6 ký tự.")
+                    reg_plan = "free"  # Force Free plan only
                     
-                    # Check username and email uniqueness (only if form is filled)
-                    if reg_user and reg_email and not errors:
-                        # Check username
-                        if check_username_exists(reg_user):
-                            errors.append(f"Tên đăng nhập '{reg_user}' đã được sử dụng. Vui lòng chọn tên khác.")
+                    # Show disabled plans info
+                    st.info("ℹ️ **Gói Basic** (300 lượt/tháng), **Gói Premium** (600 lượt/tháng) và **Gói Pro** (1200 lượt/tháng) đang được cập nhật. Sẽ sớm có mặt sau khi triển khai phương thức thanh toán. Admin có thể nâng cấp tài khoản thủ công.")
+                    
+                    if st.form_submit_button("Tiếp tục", type="primary"):
+                        # Validation
+                        errors = []
                         
-                        # Check email
-                        if check_email_exists(reg_email):
-                            errors.append(f"Email '{reg_email}' đã được sử dụng. Vui lòng sử dụng email khác hoặc đăng nhập.")
-                    
-                    if errors:
-                        for error in errors:
-                            st.error(error)
-                    else:
-                        ok, msg = create_new_user(reg_user, reg_pass, reg_name, reg_role, reg_email, plan=reg_plan)
-                        if ok:
-                            st.success(f"Đăng ký thành công gói {reg_plan.upper()}! Vui lòng đăng nhập.")
-                            st.session_state.auth_mode = 'login'
-                            time.sleep(2)
-                            st.rerun()
+                        if not all([reg_name, reg_email, reg_user, reg_pass]):
+                            errors.append("Vui lòng điền đầy đủ thông tin.")
+                        
+                        # Password validation
+                        if reg_pass and len(reg_pass) < 6:
+                            errors.append("Mật khẩu phải có ít nhất 6 ký tự.")
+                        
+                        # Check username and email uniqueness (only if form is filled)
+                        if reg_user and reg_email and not errors:
+                            # Check username
+                            if check_username_exists(reg_user):
+                                errors.append(f"Tên đăng nhập '{reg_user}' đã được sử dụng. Vui lòng chọn tên khác.")
+                            
+                            # Check email
+                            if check_email_exists(reg_email):
+                                errors.append(f"Email '{reg_email}' đã được sử dụng. Vui lòng sử dụng email khác hoặc đăng nhập.")
+                        
+                        if errors:
+                            for error in errors:
+                                st.error(error)
                         else:
-                            # Check if error is about duplicate
-                            if "already exists" in msg.lower() or "đã được sử dụng" in msg.lower():
-                                if "username" in msg.lower():
-                                    st.error(f"Tên đăng nhập '{reg_user}' đã được sử dụng. Vui lòng chọn tên khác.")
-                                elif "email" in msg.lower():
-                                    st.error(f"Email '{reg_email}' đã được sử dụng. Vui lòng sử dụng email khác hoặc đăng nhập.")
+                            # Store registration data and send OTP
+                            st.session_state.reg_data = {
+                                'name': reg_name,
+                                'email': reg_email,
+                                'username': reg_user,
+                                'password': reg_pass,
+                                'role': reg_role,
+                                'plan': reg_plan
+                            }
+                            
+                            # Generate and send OTP
+                            otp = str(secrets.randbelow(900000) + 100000)
+                            try:
+                                send_otp_email(reg_email, otp)
+                                st.session_state.otp_gen = otp
+                                st.session_state.otp_step = 2
+                                st.success("Đã gửi mã OTP đến email của bạn! Vui lòng kiểm tra hộp thư.")
+                                time.sleep(1)
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Không thể gửi email OTP. Vui lòng thử lại sau. Lỗi: {str(e)}")
+            
+            elif st.session_state.otp_step == 2:
+                # Step 2: OTP verification
+                st.info("📧 Mã OTP đã được gửi đến email của bạn. Vui lòng nhập mã để hoàn tất đăng ký.")
+                otp_in = st.text_input("Nhập mã OTP (6 chữ số):", max_chars=6, placeholder="000000")
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("Xác nhận OTP", type="primary"):
+                        if otp_in == st.session_state.otp_gen:
+                            # OTP correct, create user
+                            reg_data = st.session_state.reg_data
+                            ok, msg = create_new_user(
+                                reg_data['username'],
+                                reg_data['password'],
+                                reg_data['name'],
+                                reg_data['role'],
+                                reg_data['email'],
+                                plan=reg_data['plan']
+                            )
+                            if ok:
+                                st.success(f"Đăng ký thành công gói {reg_data['plan'].upper()}! Vui lòng đăng nhập.")
+                                # Clear registration data
+                                if 'otp_step' in st.session_state:
+                                    del st.session_state.otp_step
+                                if 'otp_gen' in st.session_state:
+                                    del st.session_state.otp_gen
+                                if 'reg_data' in st.session_state:
+                                    del st.session_state.reg_data
+                                st.session_state.auth_mode = 'login'
+                                time.sleep(2)
+                                st.rerun()
+                            else:
+                                # Check if error is about duplicate
+                                if "already exists" in msg.lower() or "đã được sử dụng" in msg.lower():
+                                    if "username" in msg.lower():
+                                        st.error(f"Tên đăng nhập '{reg_data['username']}' đã được sử dụng. Vui lòng chọn tên khác.")
+                                    elif "email" in msg.lower():
+                                        st.error(f"Email '{reg_data['email']}' đã được sử dụng. Vui lòng sử dụng email khác hoặc đăng nhập.")
+                                    else:
+                                        st.error(f"Lỗi: {msg}")
                                 else:
                                     st.error(f"Lỗi: {msg}")
-                            else:
-                                st.error(f"Lỗi: {msg}")
+                        else:
+                            st.error("Mã OTP không đúng. Vui lòng thử lại.")
+                
+                with col2:
+                    if st.button("Gửi lại OTP"):
+                        reg_data = st.session_state.reg_data
+                        otp = str(secrets.randbelow(900000) + 100000)
+                        try:
+                            send_otp_email(reg_data['email'], otp)
+                            st.session_state.otp_gen = otp
+                            st.success("Đã gửi lại mã OTP!")
+                            time.sleep(1)
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Không thể gửi email OTP. Vui lòng thử lại sau. Lỗi: {str(e)}")
+                
+                if st.button("Quay lại"):
+                    st.session_state.otp_step = 1
+                    st.rerun()
             if st.button("Đã có tài khoản? Đăng nhập"):
                 st.session_state.auth_mode = 'login'
                 st.rerun()

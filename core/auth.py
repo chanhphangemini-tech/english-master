@@ -40,23 +40,41 @@ def check_login(username, password):
             user = response.data[0]
             db_pass = str(user.get('password', ''))
             
+            # Try bcrypt verification first
             try:
-                if bcrypt.checkpw(password.encode('utf-8'), db_pass.encode('utf-8')):
-                    # Update last activity
-                    st.session_state.last_activity = datetime.now()
-                    return user
-            except (ValueError, TypeError):
+                # Check if password is already hashed (bcrypt hashes start with $2b$ or $2a$)
+                if db_pass.startswith('$2') and len(db_pass) >= 60:
+                    # It's a bcrypt hash, verify it
+                    if bcrypt.checkpw(password.encode('utf-8'), db_pass.encode('utf-8')):
+                        # Update last activity
+                        st.session_state.last_activity = datetime.now()
+                        return user
+                    else:
+                        logger.warning(f"Password verification failed for user: {username}")
+                        return None
+                else:
+                    # Legacy plain text password (should not happen for new users)
+                    if db_pass == password:
+                        st.session_state.last_activity = datetime.now()
+                        # --- AUTO-HASHING FOR LEGACY PASSWORDS ---
+                        try:
+                            logger.info(f"Auto-hashing legacy password for user: {username}")
+                            # Call the existing update function which handles hashing
+                            update_user_password(username, password)
+                        except Exception as e:
+                            logger.error(f"Failed to auto-hash password for {username}: {e}")
+                        # --- END AUTO-HASHING ---
+                        return user
+                    else:
+                        logger.warning(f"Legacy password mismatch for user: {username}")
+                        return None
+            except Exception as bcrypt_error:
+                logger.error(f"Bcrypt verification error for user {username}: {bcrypt_error}")
+                # Fallback to plain text comparison (for legacy passwords)
                 if db_pass == password:
                     st.session_state.last_activity = datetime.now()
-                    # --- AUTO-HASHING FOR LEGACY PASSWORDS ---
-                    try:
-                        logger.info(f"Auto-hashing legacy password for user: {username}")
-                        # Call the existing update function which handles hashing
-                        update_user_password(username, password)
-                    except Exception as e:
-                        logger.error(f"Failed to auto-hash password for {username}: {e}")
-                    # --- END AUTO-HASHING ---
                     return user
+                return None
             
             if str(user.get('status', 'active')).lower() == 'disabled':
                 return "LOCKED"
