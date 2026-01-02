@@ -108,24 +108,41 @@ def create_new_user(username, password, name, role, email, plan=None):
                 'p_plan': plan
             }).execute()
             
-            # Parse RPC result - Supabase RPC returns data in different formats
+            # Parse RPC result - function now returns TEXT in format "SUCCESS:message" or "ERROR:message"
             rpc_result = None
             if result.data:
-                if isinstance(result.data, dict):
+                # Handle different response formats
+                if isinstance(result.data, str):
                     rpc_result = result.data
                 elif isinstance(result.data, list) and len(result.data) > 0:
-                    rpc_result = result.data[0] if isinstance(result.data[0], dict) else result.data
-                elif hasattr(result, 'data') and result.data:
-                    rpc_result = result.data
-            
-            if rpc_result and isinstance(rpc_result, dict):
-                if rpc_result.get('success'):
-                    return True, rpc_result.get('message', 'Account created successfully!')
+                    rpc_result = result.data[0] if isinstance(result.data[0], str) else str(result.data[0])
+                elif isinstance(result.data, dict):
+                    # Try to extract from dict
+                    rpc_result = result.data.get('register_user') or str(result.data)
                 else:
-                    error_msg = rpc_result.get('message', 'Registration failed via RPC')
+                    rpc_result = str(result.data)
+            
+            if rpc_result:
+                if rpc_result.startswith('SUCCESS:'):
+                    message = rpc_result.replace('SUCCESS:', '', 1)
+                    return True, message
+                elif rpc_result.startswith('ERROR:'):
+                    error_msg = rpc_result.replace('ERROR:', '', 1)
                     logger.warning(f"RPC registration failed: {error_msg}")
-            else:
-                logger.warning(f"RPC returned unexpected format: {result.data}")
+                    return False, error_msg
+                else:
+                    # Try to parse as JSON if it's JSON format
+                    try:
+                        import json
+                        if isinstance(rpc_result, str) and rpc_result.strip().startswith('{'):
+                            parsed = json.loads(rpc_result)
+                            if parsed.get('success'):
+                                return True, parsed.get('message', 'Account created successfully!')
+                            else:
+                                return False, parsed.get('message', 'Registration failed')
+                    except:
+                        pass
+                    logger.warning(f"RPC returned unexpected format: {rpc_result}")
         except Exception as rpc_error:
             # If RPC fails, fall back to direct insert
             logger.warning(f"RPC function not available or failed: {rpc_error}, trying direct insert")
