@@ -40,8 +40,33 @@ def check_login(username, password):
         if not username_clean:
             logger.warning("Login failed: Empty username")
             return None
-            
+        
+        logger.info(f"Attempting to find user: '{username_clean}'")
         response = supabase.table("Users").select("*").eq("username", username_clean).execute()
+        
+        # Debug: Log response details
+        logger.info(f"Query response: data_count={len(response.data) if response.data else 0}, response_type={type(response)}")
+        if response.data:
+            logger.info(f"Found user: {response.data[0].get('username')}, id={response.data[0].get('id')}")
+        else:
+            logger.warning(f"No user found with username: '{username_clean}'")
+            # Try case-insensitive search as fallback
+            try:
+                all_users = supabase.table("Users").select("username, id").execute()
+                if all_users.data:
+                    logger.info(f"Available usernames in DB: {[u.get('username') for u in all_users.data]}")
+                    # Try case-insensitive match
+                    for u in all_users.data:
+                        if u.get('username', '').lower() == username_clean.lower():
+                            logger.info(f"Found case-insensitive match: '{u.get('username')}' matches '{username_clean}'")
+                            # Retry with exact username from DB
+                            response = supabase.table("Users").select("*").eq("username", u.get('username')).execute()
+                            if response.data:
+                                logger.info(f"Successfully retrieved user with exact username from DB")
+                                break
+            except Exception as fallback_error:
+                logger.error(f"Fallback search error: {fallback_error}")
+        
         if response.data:
             user = response.data[0]
             db_pass = str(user.get('password', ''))
