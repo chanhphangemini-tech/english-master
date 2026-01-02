@@ -49,13 +49,20 @@ def get_cached_audio_url(text: str, voice: str = "en-US-AriaNeural") -> Optional
             "file_url, text_hash"
         ).eq("text_hash", text_hash).maybe_single().execute()
         
-        if result.data and result.data.get('file_url'):
-            return result.data['file_url']
+        # Check if result exists and has data
+        if result and hasattr(result, 'data') and result.data:
+            file_url = result.data.get('file_url')
+            if file_url:
+                return file_url
         
         return None
         
     except Exception as e:
-        logger.error(f"Error getting cached audio URL: {e}")
+        # Log error but don't fail - this is a cache lookup, not critical
+        error_msg = str(e)
+        # Only log if it's not a 406 (RLS policy issue) to reduce noise
+        if '406' not in error_msg and 'Not Acceptable' not in error_msg:
+            logger.error(f"Error getting cached audio URL: {e}")
         return None
 
 def get_cached_audio(text: str, voice: str = "en-US-AriaNeural") -> Optional[Tuple[bytes, str]]:
@@ -80,7 +87,8 @@ def get_cached_audio(text: str, voice: str = "en-US-AriaNeural") -> Optional[Tup
             "file_path, file_url, text_hash"
         ).eq("text_hash", text_hash).maybe_single().execute()
         
-        if not result.data:
+        # Check if result exists and has data
+        if not result or not hasattr(result, 'data') or not result.data:
             return None
         
         file_path = result.data.get('file_path')
@@ -98,15 +106,18 @@ def get_cached_audio(text: str, voice: str = "en-US-AriaNeural") -> Optional[Tup
                 # Update usage_count and last_used_at
                 try:
                     # Get current usage_count first
-                    current = supabase.table("TTSAudioCache").select("usage_count").eq("text_hash", text_hash).single().execute()
-                    current_count = current.data.get('usage_count', 0) if current.data else 0
+                    current = supabase.table("TTSAudioCache").select("usage_count").eq("text_hash", text_hash).maybe_single().execute()
+                    current_count = 0
+                    if current and hasattr(current, 'data') and current.data:
+                        current_count = current.data.get('usage_count', 0)
                     
                     supabase.table("TTSAudioCache").update({
                         "usage_count": current_count + 1,
                         "last_used_at": get_vn_now_utc()
                     }).eq("text_hash", text_hash).execute()
                 except Exception as e:
-                    logger.warning(f"Failed to update cache usage: {e}")
+                    # Silently fail - updating usage count is not critical
+                    logger.debug(f"Failed to update cache usage: {e}")
                 
                 return (audio_response, file_url or "")
             
