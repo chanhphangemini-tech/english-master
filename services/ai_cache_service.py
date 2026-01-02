@@ -41,12 +41,22 @@ def get_cached_response(prompt: str, feature_type: str = 'general') -> Optional[
         result = supabase.table("AICache").select("id,response,hit_count").eq("cache_key", cache_key).maybe_single().execute()
         
         if result.data:
-            # Update hit_count and last_used_at
+            # Update hit_count and last_used_at using RPC function
             try:
-                supabase.table("AICache").update({
-                    "hit_count": result.data.get('hit_count', 1) + 1,
-                    "last_used_at": get_vn_now_utc()
-                }).eq("id", result.data['id']).execute()
+                new_hit_count = result.data.get('hit_count', 1) + 1
+                rpc_result = supabase.rpc('update_ai_cache_hit_count', {
+                    'p_cache_key': cache_key,
+                    'p_hit_count': new_hit_count,
+                    'p_last_used_at': get_vn_now_utc()
+                }).execute()
+                
+                # If RPC fails, try direct update as fallback
+                if not rpc_result.data or (isinstance(rpc_result.data, str) and rpc_result.data.startswith('ERROR:')):
+                    logger.debug(f"RPC update failed, trying direct: {rpc_result.data}")
+                    supabase.table("AICache").update({
+                        "hit_count": new_hit_count,
+                        "last_used_at": get_vn_now_utc()
+                    }).eq("id", result.data['id']).execute()
             except Exception as e:
                 logger.warning(f"Failed to update cache hit count: {e}")
             
@@ -91,17 +101,38 @@ def cache_response(prompt: str, response: Any, feature_type: str = 'general') ->
         except:
             response_json = {"text": str(response)}
         
-        # Upsert cache entry
-        supabase.table("AICache").upsert({
-            "cache_key": cache_key,
-            "feature_type": feature_type,
-            "prompt_hash": prompt_hash,
-            "response": response_json,
-            "hit_count": 1,
-            "last_used_at": get_vn_now_utc()
-        }, on_conflict="cache_key").execute()
+        # Upsert cache entry using RPC function to bypass RLS
+        try:
+            result = supabase.rpc('upsert_ai_cache', {
+                'p_cache_key': cache_key,
+                'p_feature_type': feature_type,
+                'p_prompt_hash': prompt_hash,
+                'p_response': response_json,
+                'p_hit_count': 1,
+                'p_last_used_at': get_vn_now_utc()
+            }).execute()
+            
+            # Check if RPC call was successful
+            if result.data and isinstance(result.data, str):
+                if result.data.startswith('SUCCESS:'):
+                    return True
+                else:
+                    logger.warning(f"RPC returned error: {result.data}")
+                    return False
+            return True
+        except Exception as rpc_error:
+            # Fallback to direct upsert if RPC fails
+            logger.debug(f"RPC upsert failed, trying direct: {rpc_error}")
+            supabase.table("AICache").upsert({
+                "cache_key": cache_key,
+                "feature_type": feature_type,
+                "prompt_hash": prompt_hash,
+                "response": response_json,
+                "hit_count": 1,
+                "last_used_at": get_vn_now_utc()
+            }, on_conflict="cache_key").execute()
+            return True
         
-        return True
     except Exception as e:
         # Log error but don't fail - caching is not critical
         error_msg = str(e)

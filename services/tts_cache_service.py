@@ -103,7 +103,7 @@ def get_cached_audio(text: str, voice: str = "en-US-AriaNeural") -> Optional[Tup
             audio_response = supabase.storage.from_(BUCKET_NAME).download(file_path)
             
             if audio_response:
-                # Update usage_count and last_used_at
+                # Update usage_count and last_used_at using RPC function
                 try:
                     # Get current usage_count first
                     current = supabase.table("TTSAudioCache").select("usage_count").eq("text_hash", text_hash).maybe_single().execute()
@@ -111,10 +111,20 @@ def get_cached_audio(text: str, voice: str = "en-US-AriaNeural") -> Optional[Tup
                     if current and hasattr(current, 'data') and current.data:
                         current_count = current.data.get('usage_count', 0)
                     
-                    supabase.table("TTSAudioCache").update({
-                        "usage_count": current_count + 1,
-                        "last_used_at": get_vn_now_utc()
-                    }).eq("text_hash", text_hash).execute()
+                    new_count = current_count + 1
+                    rpc_result = supabase.rpc('update_tts_cache_usage_count', {
+                        'p_text_hash': text_hash,
+                        'p_usage_count': new_count,
+                        'p_last_used_at': get_vn_now_utc()
+                    }).execute()
+                    
+                    # If RPC fails, try direct update as fallback
+                    if not rpc_result.data or (isinstance(rpc_result.data, str) and rpc_result.data.startswith('ERROR:')):
+                        logger.debug(f"RPC update failed, trying direct: {rpc_result.data}")
+                        supabase.table("TTSAudioCache").update({
+                            "usage_count": new_count,
+                            "last_used_at": get_vn_now_utc()
+                        }).eq("text_hash", text_hash).execute()
                 except Exception as e:
                     # Silently fail - updating usage count is not critical
                     logger.debug(f"Failed to update cache usage: {e}")
@@ -200,14 +210,45 @@ def cache_audio(
             "created_at": get_vn_now_utc()
         }
         
-        # Upsert cache entry
-        supabase.table("TTSAudioCache").upsert(
-            cache_data,
-            on_conflict="text_hash"
-        ).execute()
-        
-        logger.info(f"Cached audio for text hash {text_hash}")
-        return file_url
+        # Upsert cache entry using RPC function to bypass RLS
+        try:
+            result = supabase.rpc('upsert_tts_audio_cache', {
+                'p_text_hash': text_hash,
+                'p_text': text[:500],  # Limit text length
+                'p_voice': voice,
+                'p_file_path': file_path,
+                'p_file_url': file_url,
+                'p_file_size_bytes': len(audio_bytes),
+                'p_audio_length_seconds': audio_length_seconds,
+                'p_usage_count': 1,
+                'p_last_used_at': get_vn_now_utc()
+            }).execute()
+            
+            # Check if RPC call was successful
+            if result.data and isinstance(result.data, str):
+                if result.data.startswith('SUCCESS:'):
+                    logger.info(f"Cached audio for text hash {text_hash}")
+                    return file_url
+                else:
+                    logger.warning(f"RPC returned error: {result.data}")
+                    # Fallback to direct upsert
+                    supabase.table("TTSAudioCache").upsert(
+                        cache_data,
+                        on_conflict="text_hash"
+                    ).execute()
+                    return file_url
+            else:
+                logger.info(f"Cached audio for text hash {text_hash}")
+                return file_url
+        except Exception as rpc_error:
+            # Fallback to direct upsert if RPC fails
+            logger.debug(f"RPC upsert failed, trying direct: {rpc_error}")
+            supabase.table("TTSAudioCache").upsert(
+                cache_data,
+                on_conflict="text_hash"
+            ).execute()
+            logger.info(f"Cached audio for text hash {text_hash}")
+            return file_url
         
     except Exception as e:
         logger.error(f"Error caching audio: {e}")
