@@ -108,16 +108,24 @@ def create_new_user(username, password, name, role, email, plan=None):
                 'p_plan': plan
             }).execute()
             
+            # Parse RPC result - Supabase RPC returns data in different formats
+            rpc_result = None
             if result.data:
-                if isinstance(result.data, dict) and result.data.get('success'):
-                    return True, result.data.get('message', 'Account created successfully!')
+                if isinstance(result.data, dict):
+                    rpc_result = result.data
                 elif isinstance(result.data, list) and len(result.data) > 0:
                     rpc_result = result.data[0] if isinstance(result.data[0], dict) else result.data
-                    if rpc_result.get('success'):
-                        return True, rpc_result.get('message', 'Account created successfully!')
+                elif hasattr(result, 'data') and result.data:
+                    rpc_result = result.data
             
-            error_msg = 'Registration failed via RPC'
-            logger.warning(f"RPC registration failed: {error_msg}, trying direct insert")
+            if rpc_result and isinstance(rpc_result, dict):
+                if rpc_result.get('success'):
+                    return True, rpc_result.get('message', 'Account created successfully!')
+                else:
+                    error_msg = rpc_result.get('message', 'Registration failed via RPC')
+                    logger.warning(f"RPC registration failed: {error_msg}")
+            else:
+                logger.warning(f"RPC returned unexpected format: {result.data}")
         except Exception as rpc_error:
             # If RPC fails, fall back to direct insert
             logger.warning(f"RPC function not available or failed: {rpc_error}, trying direct insert")
@@ -132,8 +140,16 @@ def create_new_user(username, password, name, role, email, plan=None):
                 service_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
             
             if service_key and supabase:
-                # Create a service_role client for this operation
-                service_client = create_client(supabase.supabase_url, service_key)
+                # Get URL from supabase client
+                supabase_url = None
+                try:
+                    supabase_url = st.secrets["supabase"]["url"]
+                except:
+                    supabase_url = os.getenv("SUPABASE_URL")
+                
+                if supabase_url:
+                    # Create a service_role client for this operation
+                    service_client = create_client(supabase_url, service_key)
                 service_client.table("Users").insert({
                     "username": username,
                     "password": hashed,
