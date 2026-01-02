@@ -91,10 +91,14 @@ def render_profile_header(user: Dict[str, Any]) -> None:
     user_email_escaped = str(user.get('email', 'N/A')).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;').replace("'", '&#x27;')
     user_level = user.get('current_level', 'A1')
     
-    st.markdown(f"""
+    # Ensure frame_class is a valid string (not None)
+    frame_class_attr = f" {frame_class}" if frame_class else ""
+    
+    # Build HTML content
+    profile_html = f"""
     <div style="background: linear-gradient(90deg, #003366 0%, #0056b3 100%); padding: 30px; border-radius: 15px; color: white; margin-bottom: 20px;">
         <div style="display: flex; align-items: center; gap: 20px; flex-wrap: wrap;">
-            <div class="profile-avatar-frame {frame_class}" style="{frame_container_style}">
+            <div class="profile-avatar-frame{frame_class_attr}" style="{frame_container_style}">
                 <img src="{user.get('avatar_url') or 'https://cdn-icons-png.flaticon.com/512/197/197374.png'}" style="{frame_border_style}" alt="Avatar">
             </div>
             <div>
@@ -109,7 +113,9 @@ def render_profile_header(user: Dict[str, Any]) -> None:
             </div>
         </div>
     </div>
-    """, unsafe_allow_html=True)
+    """
+    
+    st.markdown(profile_html, unsafe_allow_html=True)
 
 
 def render_stats_overview(stats: Dict[str, Any]) -> None:
