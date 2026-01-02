@@ -96,7 +96,10 @@ def render_auth_page():
                 reg_name = st.text_input("Họ và tên*")
                 reg_email = st.text_input("Email*")
                 reg_user = st.text_input("Tên đăng nhập*")
-                reg_pass = st.text_input("Mật khẩu*", type="password")
+                reg_pass = st.text_input("Mật khẩu*", type="password", help="Mật khẩu phải có ít nhất 6 ký tự, bao gồm chữ cái và số")
+                
+                # Password requirements note
+                st.caption("🔒 **Yêu cầu mật khẩu:** Tối thiểu 6 ký tự, khuyến nghị bao gồm chữ cái và số để bảo mật tốt hơn")
                 
                 reg_role = "user"
 
@@ -113,8 +116,48 @@ def render_auth_page():
                 st.info("ℹ️ **Gói Basic** (300 lượt/tháng), **Gói Premium** (600 lượt/tháng) và **Gói Pro** (1200 lượt/tháng) đang được cập nhật. Sẽ sớm có mặt sau khi triển khai phương thức thanh toán. Admin có thể nâng cấp tài khoản thủ công.")
                 
                 if st.form_submit_button("Đăng ký", type="primary"):
+                    # Validation
+                    errors = []
+                    
                     if not all([reg_name, reg_email, reg_user, reg_pass]):
-                        st.warning("Vui lòng điền đầy đủ thông tin.")
+                        errors.append("Vui lòng điền đầy đủ thông tin.")
+                    
+                    # Password validation
+                    if reg_pass and len(reg_pass) < 6:
+                        errors.append("Mật khẩu phải có ít nhất 6 ký tự.")
+                    
+                    # Check username and email uniqueness (only if form is filled)
+                    if reg_user and reg_email and not errors:
+                        from core.auth import check_login, get_email_by_username
+                        # Check username
+                        try:
+                            test_user = check_login(reg_user, "dummy_password_to_check_existence")
+                            if test_user or get_email_by_username(reg_user):
+                                errors.append(f"Tên đăng nhập '{reg_user}' đã được sử dụng. Vui lòng chọn tên khác.")
+                        except:
+                            # If check fails, try direct query
+                            try:
+                                from core.database import supabase
+                                if supabase:
+                                    user_check = supabase.table("Users").select("username").eq("username", reg_user).execute()
+                                    if user_check.data:
+                                        errors.append(f"Tên đăng nhập '{reg_user}' đã được sử dụng. Vui lòng chọn tên khác.")
+                            except:
+                                pass
+                        
+                        # Check email
+                        try:
+                            from core.database import supabase
+                            if supabase:
+                                email_check = supabase.table("Users").select("email").eq("email", reg_email).execute()
+                                if email_check.data:
+                                    errors.append(f"Email '{reg_email}' đã được sử dụng. Vui lòng sử dụng email khác hoặc đăng nhập.")
+                        except:
+                            pass
+                    
+                    if errors:
+                        for error in errors:
+                            st.error(error)
                     else:
                         ok, msg = create_new_user(reg_user, reg_pass, reg_name, reg_role, reg_email, plan=reg_plan)
                         if ok:
@@ -123,7 +166,16 @@ def render_auth_page():
                             time.sleep(2)
                             st.rerun()
                         else:
-                            st.error(f"Lỗi: {msg}")
+                            # Check if error is about duplicate
+                            if "already exists" in msg.lower() or "đã được sử dụng" in msg.lower():
+                                if "username" in msg.lower():
+                                    st.error(f"Tên đăng nhập '{reg_user}' đã được sử dụng. Vui lòng chọn tên khác.")
+                                elif "email" in msg.lower():
+                                    st.error(f"Email '{reg_email}' đã được sử dụng. Vui lòng sử dụng email khác hoặc đăng nhập.")
+                                else:
+                                    st.error(f"Lỗi: {msg}")
+                            else:
+                                st.error(f"Lỗi: {msg}")
             if st.button("Đã có tài khoản? Đăng nhập"):
                 st.session_state.auth_mode = 'login'
                 st.rerun()
