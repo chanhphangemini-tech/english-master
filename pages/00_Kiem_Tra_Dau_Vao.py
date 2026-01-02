@@ -12,7 +12,7 @@ st.set_page_config(page_title="Kiểm Tra Đầu Vào", page_icon="🎯", layout
 
 # --- AUTH CHECK ---
 if not st.session_state.get("logged_in"):
-    st.switch_page("Home.py")
+    st.switch_page("home.py")
 
 apply_page_theme()  # Apply theme + sidebar + auth
 
@@ -285,4 +285,4 @@ elif st.session_state.pt_step == 6:
     - Khám phá các phòng luyện kỹ năng để áp dụng kiến thức.
     """)
     if st.button("Về trang chủ", type="primary"):
-        st.switch_page("Home.py")
+        st.switch_page("home.py")
