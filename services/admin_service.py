@@ -225,8 +225,8 @@ def admin_update_user_comprehensive(
             changes_log.append(f"role: '{current_user.get('role')}' → '{role}'")
         
         if plan is not None and plan != current_user.get('plan'):
-            # Validate plan
-            valid_plans = ['free', 'premium']
+            # Validate plan (updated to include all subscription tiers)
+            valid_plans = ['free', 'basic', 'premium', 'pro']
             if plan not in valid_plans:
                 return False, f"Plan không hợp lệ. Phải là một trong: {valid_plans}"
             update_data['plan'] = plan
@@ -236,10 +236,10 @@ def admin_update_user_comprehensive(
             if plan == 'free':
                 update_data['premium_tier'] = None
                 changes_log.append("premium_tier: removed (free plan)")
-            elif plan == 'premium' and premium_tier is None:
-                # Default to 'premium' tier if not specified
-                update_data['premium_tier'] = 'premium'
-                changes_log.append("premium_tier: set to 'premium' (default)")
+            elif plan in ('basic', 'premium', 'pro') and premium_tier is None:
+                # Default tier to match plan if not specified
+                update_data['premium_tier'] = plan
+                changes_log.append(f"premium_tier: set to '{plan}' (default)")
         
         if premium_tier is not None:
             # Validate tier
@@ -247,10 +247,10 @@ def admin_update_user_comprehensive(
             if premium_tier not in valid_tiers:
                 return False, f"Premium tier không hợp lệ. Phải là một trong: {valid_tiers}"
             
-            # Only allow tier if plan is premium
+            # Only allow tier if plan is a premium tier (basic, premium, or pro)
             final_plan = plan if plan is not None else current_user.get('plan')
-            if final_plan != 'premium':
-                return False, "Premium tier chỉ có thể set khi plan='premium'"
+            if final_plan not in ('basic', 'premium', 'pro'):
+                return False, "Premium tier chỉ có thể set khi plan là basic, premium, hoặc pro"
             
             if premium_tier != current_user.get('premium_tier'):
                 update_data['premium_tier'] = premium_tier
