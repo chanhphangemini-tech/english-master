@@ -414,45 +414,59 @@ def delete_user(username):
     if not supabase: 
         return False
     
-    # Prevent self-deletion
-    if st.session_state.get('user_info', {}).get('username') == username:
-        logger.warning(f"User {username} attempted to delete themselves")
-        return False
-    
     try:
-        # Try using service_role key if available (bypasses RLS)
-        import streamlit as st
-        import os
-        from supabase import create_client
-        
-        service_key = None
-        try:
-            service_key = st.secrets.get("supabase", {}).get("service_role_key")
-        except:
-            service_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-        
-        if service_key:
-            supabase_url = None
-            try:
-                supabase_url = st.secrets["supabase"]["url"]
-            except:
-                supabase_url = os.getenv("SUPABASE_URL")
-            
-            if supabase_url:
-                service_client = create_client(supabase_url, service_key)
-                result = service_client.table("Users").delete().eq("username", username).execute()
-                if result.data:
-                    logger.info(f"User {username} deleted successfully via service_role")
-                    return True
-        
-        # Fallback: Try regular delete (will use RLS policies)
-        result = supabase.table("Users").delete().eq("username", username).execute()
-        if result.data:
-            logger.info(f"User {username} deleted successfully")
-            return True
-        else:
-            logger.warning(f"User {username} not found or deletion failed")
+        # Get user_id from username
+        user_res = supabase.table("Users").select("id").eq("username", username).single().execute()
+        if not user_res.data:
+            logger.warning(f"User {username} not found")
             return False
+        
+        user_id = user_res.data['id']
+        
+        # Get admin_id from session
+        admin_id = None
+        try:
+            admin_id = st.session_state.get('user_info', {}).get('id')
+        except:
+            pass
+        
+        # Prevent self-deletion
+        if admin_id == user_id:
+            logger.warning(f"User {username} attempted to delete themselves")
+            return False
+        
+        # Try RPC function first (bypasses RLS)
+        try:
+            rpc_result = supabase.rpc("admin_delete_user", {
+                "p_user_id": user_id,
+                "p_admin_user_id": admin_id
+            }).execute()
+            
+            if rpc_result.data:
+                result_text = str(rpc_result.data) if not isinstance(rpc_result.data, str) else rpc_result.data
+                if result_text.startswith('SUCCESS:'):
+                    logger.info(f"User {username} deleted successfully via RPC: {result_text}")
+                    return True
+                elif result_text.startswith('ERROR:'):
+                    error_msg = result_text.replace('ERROR:', '')
+                    logger.error(f"RPC admin_delete_user error: {error_msg}")
+                    return False
+        except Exception as rpc_error:
+            logger.warning(f"RPC admin_delete_user failed: {rpc_error}")
+            # Fallback: Try direct delete (may fail due to RLS)
+            try:
+                result = supabase.table("Users").delete().eq("id", user_id).execute()
+                if result.data:
+                    logger.info(f"User {username} deleted successfully via direct delete")
+                    return True
+                else:
+                    logger.warning(f"User {username} deletion failed - no rows deleted")
+                    return False
+            except Exception as direct_error:
+                logger.error(f"Direct delete also failed: {direct_error}")
+                return False
+        
+        return False
     except Exception as e:
         logger.error(f"Error deleting user {username}: {e}")
         import traceback
