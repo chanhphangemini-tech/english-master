@@ -94,26 +94,33 @@ def render_profile_header(user: Dict[str, Any]) -> None:
     # Ensure frame_class is a valid string (not None)
     frame_class_attr = f" {frame_class}" if frame_class else ""
     
-    # Build HTML content
-    profile_html = f"""
-    <div style="background: linear-gradient(90deg, #003366 0%, #0056b3 100%); padding: 30px; border-radius: 15px; color: white; margin-bottom: 20px;">
-        <div style="display: flex; align-items: center; gap: 20px; flex-wrap: wrap;">
-            <div class="profile-avatar-frame{frame_class_attr}" style="{frame_container_style}">
-                <img src="{user.get('avatar_url') or 'https://cdn-icons-png.flaticon.com/512/197/197374.png'}" style="{frame_border_style}" alt="Avatar">
-            </div>
-            <div>
-                <h1 style="color: white; margin: 0; font-size: 32px; display: flex; align-items: center; flex-wrap: wrap;">
-                    {user_name_escaped} 
-                    <span style="font-size: 0.6em; background: rgba(255,255,255,0.2); padding: 5px 10px; border-radius: 8px; margin-left: 8px;">LVL {user_level}</span>
-                    {plan_badge}
-                    {title_badge}
-                </h1>
-                <p style="margin: 10px 0 0 0; opacity: 0.9;">@{user_username_escaped} | 📧 {user_email_escaped}</p>
-                <p style="margin: 5px 0 0 0; font-size: 14px; opacity: 0.8;">📅 Tham gia: {join_date_display}</p>
-            </div>
-        </div>
-    </div>
-    """
+    # Ensure frame styles are valid strings (not None)
+    frame_container_style_safe = frame_container_style or ""
+    frame_border_style_safe = frame_border_style or ""
+    
+    # Ensure avatar URL is valid
+    avatar_url = user.get('avatar_url') or 'https://cdn-icons-png.flaticon.com/512/197/197374.png'
+    
+    # Build HTML content using string concatenation to avoid f-string issues
+    profile_html = (
+        '<div style="background: linear-gradient(90deg, #003366 0%, #0056b3 100%); padding: 30px; border-radius: 15px; color: white; margin-bottom: 20px;">'
+        '<div style="display: flex; align-items: center; gap: 20px; flex-wrap: wrap;">'
+        '<div class="profile-avatar-frame' + frame_class_attr + '" style="' + frame_container_style_safe + '">'
+        '<img src="' + avatar_url + '" style="' + frame_border_style_safe + '" alt="Avatar">'
+        '</div>'
+        '<div>'
+        '<h1 style="color: white; margin: 0; font-size: 32px; display: flex; align-items: center; flex-wrap: wrap;">'
+        + user_name_escaped + ' '
+        + '<span style="font-size: 0.6em; background: rgba(255,255,255,0.2); padding: 5px 10px; border-radius: 8px; margin-left: 8px;">LVL ' + str(user_level) + '</span>'
+        + plan_badge
+        + title_badge
+        + '</h1>'
+        + '<p style="margin: 10px 0 0 0; opacity: 0.9;">@' + user_username_escaped + ' | 📧 ' + user_email_escaped + '</p>'
+        + '<p style="margin: 5px 0 0 0; font-size: 14px; opacity: 0.8;">📅 Tham gia: ' + join_date_display + '</p>'
+        '</div>'
+        '</div>'
+        '</div>'
+    )
     
     st.markdown(profile_html, unsafe_allow_html=True)
 
