@@ -40,20 +40,34 @@ def check_login(username, password):
             user = response.data[0]
             db_pass = str(user.get('password', ''))
             
+            # Debug logging
+            logger.info(f"Login attempt for user: {username}, password hash preview: {db_pass[:20] if db_pass else 'None'}...")
+            
+            # Check if account is disabled first
+            if str(user.get('status', 'active')).lower() == 'disabled':
+                return "LOCKED"
+            
             # Try bcrypt verification first
             try:
                 # Check if password is already hashed (bcrypt hashes start with $2b$ or $2a$)
                 if db_pass.startswith('$2') and len(db_pass) >= 60:
                     # It's a bcrypt hash, verify it
-                    if bcrypt.checkpw(password.encode('utf-8'), db_pass.encode('utf-8')):
-                        # Update last activity
-                        st.session_state.last_activity = datetime.now()
-                        return user
-                    else:
-                        logger.warning(f"Password verification failed for user: {username}")
+                    try:
+                        is_valid = bcrypt.checkpw(password.encode('utf-8'), db_pass.encode('utf-8'))
+                        if is_valid:
+                            # Update last activity
+                            st.session_state.last_activity = datetime.now()
+                            logger.info(f"Login successful for user: {username}")
+                            return user
+                        else:
+                            logger.warning(f"Password verification failed for user: {username} (bcrypt hash mismatch)")
+                            return None
+                    except Exception as bcrypt_check_error:
+                        logger.error(f"Bcrypt checkpw error for user {username}: {bcrypt_check_error}")
                         return None
                 else:
                     # Legacy plain text password (should not happen for new users)
+                    logger.info(f"Legacy password detected for user: {username}")
                     if db_pass == password:
                         st.session_state.last_activity = datetime.now()
                         # --- AUTO-HASHING FOR LEGACY PASSWORDS ---
@@ -73,15 +87,16 @@ def check_login(username, password):
                 # Fallback to plain text comparison (for legacy passwords)
                 if db_pass == password:
                     st.session_state.last_activity = datetime.now()
+                    logger.info(f"Login successful for user: {username} (legacy password)")
                     return user
+                logger.warning(f"Password mismatch for user: {username}")
                 return None
-            
-            if str(user.get('status', 'active')).lower() == 'disabled':
-                return "LOCKED"
         else:
             logger.warning(f"Login failed: User '{username}' not found.")
     except Exception as e:
         logger.error(f"Login Error: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
     return None
 
 def get_email_by_username(username):
