@@ -136,24 +136,45 @@ def get_email_by_username(username):
         logger.error(f"Get email error: {e}")
     return None
 
-def check_username_exists(username):
-    """Kiểm tra xem username đã tồn tại chưa"""
-    if not supabase: return False
+def get_user_by_id(user_id):
+    """Lấy thông tin user từ database theo user_id."""
+    if not supabase or not user_id:
+        return None
     try:
-        res = supabase.table("Users").select("username").eq("username", username).limit(1).execute()
-        return len(res.data) > 0
+        res = supabase.table("Users").select("*").eq("id", user_id).single().execute()
+        if res.data:
+            return res.data
     except Exception as e:
-        logger.error(f"Error checking username: {e}")
-        return False
+        logger.error(f"Error getting user by id {user_id}: {e}")
+    return None
 
-def check_email_exists(email):
-    """Kiểm tra xem email đã tồn tại chưa"""
-    if not supabase: return False
+def refresh_user_info(user_id=None):
+    """Refresh user info từ database và cập nhật vào session_state."""
+    if not supabase:
+        return False
+    
     try:
-        res = supabase.table("Users").select("email").eq("email", email).limit(1).execute()
-        return len(res.data) > 0
+        # Get user_id from session if not provided
+        if user_id is None:
+            user_id = st.session_state.get('user_info', {}).get('id')
+            if not user_id:
+                logger.warning("Cannot refresh user info: no user_id provided and not in session")
+                return False
+        
+        # Fetch fresh user data from database
+        user_data = get_user_by_id(user_id)
+        if user_data:
+            # Update session_state with fresh data
+            st.session_state.user_info = user_data
+            logger.info(f"User info refreshed for user_id: {user_id}")
+            return True
+        else:
+            logger.warning(f"Could not refresh user info: user not found (user_id: {user_id})")
+            return False
     except Exception as e:
-        logger.error(f"Error checking email: {e}")
+        logger.error(f"Error refreshing user info: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return False
 
 def update_user_password(username, new_pass):
@@ -169,12 +190,10 @@ def create_new_user(username, password, name, role, email, plan=None):
     if not supabase: return False, "No DB Connection"
     try:
         # Check if username already exists
-        res = supabase.table("Users").select("username").eq("username", username).execute()
+        res = supabase.table("Users").select("id").eq("username", username).execute()
         if res.data:
-            return False, "Username already exists!"
-        
-        if plan is None:
-            plan = 'premium' if role == 'admin' else 'free'
+            return False, "Username already exists"
+
 
         hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
         
@@ -192,190 +211,48 @@ def create_new_user(username, password, name, role, email, plan=None):
             # Parse RPC result - function now returns TEXT in format "SUCCESS:message" or "ERROR:message"
             rpc_result = None
             if result.data:
-                # Handle different response formats
-                if isinstance(result.data, str):
-                    rpc_result = result.data
-                elif isinstance(result.data, list) and len(result.data) > 0:
-                    rpc_result = result.data[0] if isinstance(result.data[0], str) else str(result.data[0])
-                elif isinstance(result.data, dict):
-                    # Try to extract from dict
-                    rpc_result = result.data.get('register_user') or str(result.data)
-                else:
-                    rpc_result = str(result.data)
+                rpc_result = str(result.data) if not isinstance(result.data, str) else result.data
             
-            if rpc_result:
-                if rpc_result.startswith('SUCCESS:'):
-                    message = rpc_result.replace('SUCCESS:', '', 1)
-                    return True, message
-                elif rpc_result.startswith('ERROR:'):
-                    error_msg = rpc_result.replace('ERROR:', '', 1)
-                    logger.warning(f"RPC registration failed: {error_msg}")
-                    return False, error_msg
-                else:
-                    # Try to parse as JSON if it's JSON format
-                    try:
-                        import json
-                        if isinstance(rpc_result, str) and rpc_result.strip().startswith('{'):
-                            parsed = json.loads(rpc_result)
-                            if parsed.get('success'):
-                                return True, parsed.get('message', 'Account created successfully!')
-                            else:
-                                return False, parsed.get('message', 'Registration failed')
-                    except:
-                        pass
-                    logger.warning(f"RPC returned unexpected format: {rpc_result}")
+            if rpc_result and rpc_result.startswith('SUCCESS:'):
+                logger.info(f"User {username} created successfully via RPC")
+                return True, "Account created successfully!"
+            elif rpc_result and rpc_result.startswith('ERROR:'):
+                error_msg = rpc_result.replace('ERROR:', '')
+                logger.error(f"RPC register_user error: {error_msg}")
+                return False, error_msg
         except Exception as rpc_error:
-            # If RPC fails, fall back to direct insert
-            logger.warning(f"RPC function not available or failed: {rpc_error}, trying direct insert")
-        
-        # Fallback: Try to use service_role key if available (bypasses RLS)
-        try:
-            import streamlit as st
-            service_key = None
+            logger.warning(f"RPC register_user failed, trying direct insert: {rpc_error}")
+            # Fallback: Try direct insert (may fail due to RLS)
             try:
-                service_key = st.secrets.get("supabase", {}).get("service_role_key")
-            except:
-                service_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-            
-            if service_key and supabase:
-                # Get URL from supabase client
-                supabase_url = None
-                try:
-                    supabase_url = st.secrets["supabase"]["url"]
-                except:
-                    supabase_url = os.getenv("SUPABASE_URL")
-                
-                if supabase_url:
-                    # Create a service_role client for this operation
-                    service_client = create_client(supabase_url, service_key)
-                service_client.table("Users").insert({
+                default_plan = plan if plan else 'free'
+                supabase.table("Users").insert({
                     "username": username,
                     "password": hashed,
                     "name": name,
                     "email": email,
                     "role": role,
-                    "plan": plan,
-                    "status": "active",
-                    "created_at": datetime.now().isoformat()
+                    "plan": default_plan,
+                    "status": "active"
                 }).execute()
+                logger.info(f"User {username} created successfully via direct insert")
                 return True, "Account created successfully!"
-        except Exception as service_error:
-            logger.warning(f"Service role insert failed: {service_error}, trying regular insert")
+            except Exception as direct_error:
+                logger.error(f"Direct insert also failed: {direct_error}")
+                return False, f"Registration failed: {str(direct_error)}"
         
-        # Final fallback: Direct insert (will use RLS policies)
-        supabase.table("Users").insert({
-            "username": username,
-            "password": hashed,
-            "name": name,
-            "email": email,
-            "role": role,
-            "plan": plan,
-            "status": "active",
-            "created_at": datetime.now().isoformat()
-        }).execute()
-        return True, "Account created successfully!"
+        return False, "Registration failed: Unknown error"
     except Exception as e:
-        logger.error(f"User registration error: {e}")
+        logger.error(f"Create user error: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return False, str(e)
 
-def change_password(username, old_pass, new_pass):
+def update_user_avatar(username, avatar_file):
     if not supabase: return False, "No DB"
     try:
-        response = supabase.table("Users").select("password").eq("username", username).execute()
-        if response.data:
-            current_db_pass = response.data[0]['password']
-            password_ok = False
-            try:
-                if bcrypt.checkpw(old_pass.encode('utf-8'), current_db_pass.encode('utf-8')):
-                    password_ok = True
-            except (ValueError, TypeError):
-                if current_db_pass == old_pass:
-                    password_ok = True
-            
-            if password_ok:
-                hashed_new_pass = bcrypt.hashpw(new_pass.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-                supabase.table("Users").update({"password": hashed_new_pass}).eq("username", username).execute()
-                return True, "Đổi mật khẩu thành công!"
-            else:
-                return False, "Mật khẩu cũ không đúng."
-        return False, "Không tìm thấy tài khoản."
-    except Exception as e:
-        return False, str(e)
-
-def crop_image_to_square(img, crop_box=None):
-    """
-    Crop ảnh thành hình vuông 1:1.
-    Nếu crop_box được cung cấp, sử dụng nó. Nếu không, tự động crop phần giữa.
-    
-    Args:
-        img: PIL Image object
-        crop_box: Tuple (x, y, width, height) hoặc (x, y, size, size) hoặc None để auto-crop
-    
-    Returns:
-        PIL Image đã được crop thành hình vuông
-    """
-    width, height = img.size
-    
-    if crop_box:
-        x, y, w, h = crop_box
-        # Đảm bảo crop box là hình vuông (lấy size nhỏ hơn)
-        size = min(w, h)
-        
-        # Tính toán vị trí crop
-        left = max(0, min(x, width - size))
-        top = max(0, min(y, height - size))
-        right = min(width, left + size)
-        bottom = min(height, top + size)
-        
-        # Đảm bảo kích thước cuối cùng là hình vuông
-        final_size = min(right - left, bottom - top)
-        if right - left > final_size:
-            right = left + final_size
-        if bottom - top > final_size:
-            bottom = top + final_size
-            
-        cropped = img.crop((left, top, right, bottom))
-    else:
-        # Auto-crop: lấy phần giữa thành hình vuông
-        size = min(width, height)
-        left = (width - size) // 2
-        top = (height - size) // 2
-        right = left + size
-        bottom = top + size
-        cropped = img.crop((left, top, right, bottom))
-    
-    return cropped
-
-def upload_and_update_avatar(username, image_file, crop_box=None):
-    """
-    Upload và cập nhật avatar với crop tự động thành hình vuông 1:1.
-    
-    Args:
-        username: Tên người dùng
-        image_file: File ảnh đã upload
-        crop_box: Tuple (x, y, width, height) để crop, hoặc None để auto-crop
-    
-    Returns:
-        Tuple (success: bool, result: str) - result là URL hoặc error message
-    """
-    if not supabase: return False, "No DB"
-    try:
-        img = Image.open(image_file)
-        
-        # Convert RGBA nếu cần (để xử lý PNG có alpha channel)
-        if img.mode == 'RGBA':
-            # Tạo background trắng
-            background = Image.new('RGB', img.size, (255, 255, 255))
-            background.paste(img, mask=img.split()[3])  # Sử dụng alpha channel làm mask
-            img = background
-        elif img.mode != 'RGB':
-            img = img.convert('RGB')
-        
-        # Crop thành hình vuông 1:1
-        img = crop_image_to_square(img, crop_box)
-        
-        # Resize về kích thước chuẩn (400x400px để đảm bảo chất lượng)
-        img = img.resize((400, 400), Image.Resampling.LANCZOS)
+        img = Image.open(avatar_file)
+        img = img.convert('RGB')
+        img = img.resize((200, 200), Image.Resampling.LANCZOS)
         
         # Lưu vào bytes
         img_byte_arr = io.BytesIO()

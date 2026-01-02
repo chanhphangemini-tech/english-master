@@ -24,6 +24,15 @@ if not st.session_state.get("logged_in"):
 
 apply_page_theme()  # Apply theme + sidebar + auth
 
+# Refresh user info from database to get latest plan/tier/role updates
+user_id = st.session_state.get("user_info", {}).get("id")
+if user_id:
+    try:
+        from core.auth import refresh_user_info
+        refresh_user_info(user_id)
+    except Exception as e:
+        logger.warning(f"Could not refresh user info: {e}")
+
 user: Dict[str, Any] = st.session_state.get("user_info")
 
 if user:

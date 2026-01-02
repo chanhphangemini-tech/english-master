@@ -231,6 +231,40 @@ def render_sidebar():
                     animation: premium-glow 2s ease-in-out infinite;
                     box-sizing: border-box;
                 }
+                .sidebar-basic-badge {
+                    color: #3b82f6;
+                    font-weight: 700;
+                    font-size: 0.95rem;
+                    margin: 8px 0 4px 0;
+                    text-align: center;
+                    padding: 8px 16px;
+                    background: linear-gradient(135deg, #60a5fa 0%, #93c5fd 50%, #60a5fa 100%);
+                    border-radius: 25px;
+                    display: block;
+                    width: 100%;
+                    box-shadow: 0 4px 8px rgba(59, 130, 246, 0.4);
+                    border: 2px solid #3b82f6;
+                    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+                    animation: basic-glow 2s ease-in-out infinite;
+                    box-sizing: border-box;
+                }
+                .sidebar-pro-badge {
+                    color: #a855f7;
+                    font-weight: 700;
+                    font-size: 0.95rem;
+                    margin: 8px 0 4px 0;
+                    text-align: center;
+                    padding: 8px 16px;
+                    background: linear-gradient(135deg, #c084fc 0%, #e9d5ff 50%, #c084fc 100%);
+                    border-radius: 25px;
+                    display: block;
+                    width: 100%;
+                    box-shadow: 0 4px 8px rgba(168, 85, 247, 0.4);
+                    border: 2px solid #a855f7;
+                    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+                    animation: pro-glow 2s ease-in-out infinite;
+                    box-sizing: border-box;
+                }
                 .sidebar-free-badge {
                     color: #6b7280;
                     font-weight: 700;
@@ -246,6 +280,22 @@ def render_sidebar():
                     border: 2px solid #9ca3af;
                     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
                     box-sizing: border-box;
+                }
+                @keyframes basic-glow {
+                    0%, 100% {
+                        box-shadow: 0 4px 8px rgba(59, 130, 246, 0.4);
+                    }
+                    50% {
+                        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.6), 0 0 20px rgba(96, 165, 250, 0.3);
+                    }
+                }
+                @keyframes pro-glow {
+                    0%, 100% {
+                        box-shadow: 0 4px 8px rgba(168, 85, 247, 0.4);
+                    }
+                    50% {
+                        box-shadow: 0 4px 12px rgba(168, 85, 247, 0.6), 0 0 20px rgba(192, 132, 252, 0.3);
+                    }
                 }
                 @keyframes premium-glow {
                     0%, 100% {
@@ -352,9 +402,11 @@ def render_sidebar():
             st.markdown(css_content, unsafe_allow_html=True)
             
             # Profile Section
-            # Check if user is premium
+            # Check user plan and tier
             user_plan = user_info.get('plan', 'free')
-            is_premium = str(user_plan).lower() == 'premium'
+            user_tier = user_info.get('premium_tier')
+            user_plan_lower = str(user_plan).lower()
+            is_premium = user_plan_lower in ('basic', 'premium', 'pro')
             
             st.markdown('<div class="sidebar-profile">', unsafe_allow_html=True)
             # Apply frame style from frame_service
@@ -367,11 +419,23 @@ def render_sidebar():
                 <p class="sidebar-level">Level {level}</p>
             ''', unsafe_allow_html=True)
             
-            # Premium/Free badge
-            if is_premium:
+            # Plan/Tier badge
+            if user_plan_lower == 'pro':
+                st.markdown('''
+                <p class="sidebar-pro-badge">
+                    💎 <strong>Pro Member</strong>
+                </p>
+                ''', unsafe_allow_html=True)
+            elif user_plan_lower == 'premium':
                 st.markdown('''
                 <p class="sidebar-premium-badge">
                     👑 <strong>Premium Member</strong>
+                </p>
+                ''', unsafe_allow_html=True)
+            elif user_plan_lower == 'basic':
+                st.markdown('''
+                <p class="sidebar-basic-badge">
+                    ⭐ <strong>Basic Member</strong>
                 </p>
                 ''', unsafe_allow_html=True)
             else:
@@ -512,7 +576,7 @@ def render_sidebar():
             # 5. CÁ NHÂN
             st.markdown('<p class="sidebar-section">👤 Cá nhân</p>', unsafe_allow_html=True)
             render_nav_button("⭐ Nâng Cấp", "pages/15_Premium.py", "nav_premium", None)
-            # Analytics - Premium only
+            # Analytics - Premium/Basic/Pro only
             if is_premium or role == 'admin':
                 render_nav_button("📊 Analytics", "pages/16_Analytics.py", "nav_analytics", None)
             render_nav_button("🏪 Cửa Hàng", "pages/11_Cua_Hang.py", "nav_shop", "cua_hang")

@@ -35,6 +35,21 @@ def render_profile_header(user: Dict[str, Any]) -> None:
     title_display = get_title_display_name(active_title) if active_title else None
     title_badge = f'<span style="font-size: 0.5em; background: linear-gradient(135deg, #ff7675 0%, #fd79a8 50%, #fdcb6e 100%); padding: 6px 12px; border-radius: 10px; margin-left: 8px; color: white; font-weight: bold; box-shadow: 0 2px 4px rgba(255, 118, 117, 0.3);">{title_display}</span>' if title_display else ''
     
+    # Get plan/tier badge
+    user_plan = user.get('plan', 'free')
+    user_tier = user.get('premium_tier')
+    user_plan_lower = str(user_plan).lower()
+    
+    plan_badge = ''
+    if user_plan_lower == 'pro':
+        plan_badge = '<span style="font-size: 0.5em; background: linear-gradient(135deg, #c084fc 0%, #e9d5ff 50%, #c084fc 100%); padding: 6px 12px; border-radius: 10px; margin-left: 8px; color: white; font-weight: bold; box-shadow: 0 2px 4px rgba(168, 85, 247, 0.4);">💎 Pro</span>'
+    elif user_plan_lower == 'premium':
+        plan_badge = '<span style="font-size: 0.5em; background: linear-gradient(135deg, #ffd700 0%, #ffed4e 50%, #ffd700 100%); padding: 6px 12px; border-radius: 10px; margin-left: 8px; color: white; font-weight: bold; box-shadow: 0 2px 4px rgba(212, 175, 55, 0.4);">👑 Premium</span>'
+    elif user_plan_lower == 'basic':
+        plan_badge = '<span style="font-size: 0.5em; background: linear-gradient(135deg, #60a5fa 0%, #93c5fd 50%, #60a5fa 100%); padding: 6px 12px; border-radius: 10px; margin-left: 8px; color: white; font-weight: bold; box-shadow: 0 2px 4px rgba(59, 130, 246, 0.4);">⭐ Basic</span>'
+    else:
+        plan_badge = '<span style="font-size: 0.5em; background: linear-gradient(135deg, #e5e7eb 0%, #f3f4f6 50%, #e5e7eb 100%); padding: 6px 12px; border-radius: 10px; margin-left: 8px; color: #6b7280; font-weight: bold; box-shadow: 0 2px 4px rgba(107, 114, 128, 0.2);">🆓 Free</span>'
+    
     # Add frame extra CSS if any (replace & with proper selector)
     frame_css_content = ""
     if frame_extra_css:
@@ -69,6 +84,13 @@ def render_profile_header(user: Dict[str, Any]) -> None:
     </style>"""
     
     st.markdown(combined_css, unsafe_allow_html=True)
+    
+    # Escape HTML special characters in user data
+    user_name_escaped = str(user.get('name', 'Learner')).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;').replace("'", '&#x27;')
+    user_username_escaped = str(user.get('username', '')).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;').replace("'", '&#x27;')
+    user_email_escaped = str(user.get('email', 'N/A')).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;').replace("'", '&#x27;')
+    user_level = user.get('current_level', 'A1')
+    
     st.markdown(f"""
     <div style="background: linear-gradient(90deg, #003366 0%, #0056b3 100%); padding: 30px; border-radius: 15px; color: white; margin-bottom: 20px;">
         <div style="display: flex; align-items: center; gap: 20px; flex-wrap: wrap;">
@@ -77,11 +99,12 @@ def render_profile_header(user: Dict[str, Any]) -> None:
             </div>
             <div>
                 <h1 style="color: white; margin: 0; font-size: 32px; display: flex; align-items: center; flex-wrap: wrap;">
-                    {user.get('name', 'Learner')} 
-                    <span style="font-size: 0.6em; background: rgba(255,255,255,0.2); padding: 5px 10px; border-radius: 8px; margin-left: 8px;">LVL {user.get('current_level', 'A1')}</span>
+                    {user_name_escaped} 
+                    <span style="font-size: 0.6em; background: rgba(255,255,255,0.2); padding: 5px 10px; border-radius: 8px; margin-left: 8px;">LVL {user_level}</span>
+                    {plan_badge}
                     {title_badge}
                 </h1>
-                <p style="margin: 10px 0 0 0; opacity: 0.9;">@{user.get('username')} | 📧 {user.get('email', 'N/A')}</p>
+                <p style="margin: 10px 0 0 0; opacity: 0.9;">@{user_username_escaped} | 📧 {user_email_escaped}</p>
                 <p style="margin: 5px 0 0 0; font-size: 14px; opacity: 0.8;">📅 Tham gia: {join_date_display}</p>
             </div>
         </div>
