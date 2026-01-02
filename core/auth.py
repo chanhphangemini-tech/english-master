@@ -108,17 +108,47 @@ def create_new_user(username, password, name, role, email, plan=None):
                 'p_plan': plan
             }).execute()
             
-            if result.data and result.data.get('success'):
-                return True, result.data.get('message', 'Account created successfully!')
-            else:
-                error_msg = result.data.get('message', 'Registration failed') if result.data else 'Registration failed'
-                # Fall back to direct insert
-                logger.warning(f"RPC registration failed: {error_msg}, trying direct insert")
+            if result.data:
+                if isinstance(result.data, dict) and result.data.get('success'):
+                    return True, result.data.get('message', 'Account created successfully!')
+                elif isinstance(result.data, list) and len(result.data) > 0:
+                    rpc_result = result.data[0] if isinstance(result.data[0], dict) else result.data
+                    if rpc_result.get('success'):
+                        return True, rpc_result.get('message', 'Account created successfully!')
+            
+            error_msg = 'Registration failed via RPC'
+            logger.warning(f"RPC registration failed: {error_msg}, trying direct insert")
         except Exception as rpc_error:
             # If RPC fails, fall back to direct insert
             logger.warning(f"RPC function not available or failed: {rpc_error}, trying direct insert")
         
-        # Fallback: Direct insert (will use RLS policies)
+        # Fallback: Try to use service_role key if available (bypasses RLS)
+        try:
+            import streamlit as st
+            service_key = None
+            try:
+                service_key = st.secrets.get("supabase", {}).get("service_role_key")
+            except:
+                service_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+            
+            if service_key and supabase:
+                # Create a service_role client for this operation
+                service_client = create_client(supabase.supabase_url, service_key)
+                service_client.table("Users").insert({
+                    "username": username,
+                    "password": hashed,
+                    "name": name,
+                    "email": email,
+                    "role": role,
+                    "plan": plan,
+                    "status": "active",
+                    "created_at": datetime.now().isoformat()
+                }).execute()
+                return True, "Account created successfully!"
+        except Exception as service_error:
+            logger.warning(f"Service role insert failed: {service_error}, trying regular insert")
+        
+        # Final fallback: Direct insert (will use RLS policies)
         supabase.table("Users").insert({
             "username": username,
             "password": hashed,
@@ -131,6 +161,7 @@ def create_new_user(username, password, name, role, email, plan=None):
         }).execute()
         return True, "Account created successfully!"
     except Exception as e:
+        logger.error(f"User registration error: {e}")
         return False, str(e)
 
 def change_password(username, old_pass, new_pass):
