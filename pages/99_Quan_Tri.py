@@ -43,7 +43,7 @@ def show():
         "📊 Tổng Quan", 
         "⚔️ PvP & Coin", 
         "👥 Quản Lý User", 
-        "👑 Quản lý Premium",
+        "💳 Quản lý Subscription",
         "⚙️ Quản lý Tính năng",
         "🛍️ Quản lý Cửa hàng",
         "📊 Thống kê Feedback",
@@ -275,7 +275,7 @@ def render_user_card(user, current_admin_user):
                         )
                         
                         # Plan selection
-                        plan_options = ['free', 'premium']
+                        plan_options = ['free', 'basic', 'premium', 'pro']
                         current_plan_val = user.get('plan', 'free')
                         if current_plan_val not in plan_options:
                             current_plan_index = 0
@@ -283,9 +283,28 @@ def render_user_card(user, current_admin_user):
                             current_plan_index = plan_options.index(current_plan_val)
                         new_plan = st.selectbox("Gói dịch vụ", options=plan_options, index=current_plan_index, key=f"comp_plan_{u_name}")
                         
-                        # Premium Tier (chỉ hiện khi plan='premium')
+                        # Premium Tier (chỉ hiện khi plan là premium tier)
                         new_tier = None
-                        if new_plan == 'premium':
+                        if new_plan in ['basic', 'premium', 'pro']:
+                            tier_options = ['basic', 'premium', 'pro']
+                            # Map plan to tier if plan is a tier name
+                            if new_plan in tier_options:
+                                new_tier = new_plan
+                            else:
+                                current_tier_val = user.get('premium_tier', 'premium')
+                                if current_tier_val not in tier_options:
+                                    current_tier_index = 1  # Default to 'premium'
+                                else:
+                                    current_tier_index = tier_options.index(current_tier_val)
+                                new_tier = st.selectbox(
+                                    "Premium Tier", 
+                                    options=tier_options,
+                                    index=current_tier_index,
+                                    key=f"comp_tier_{u_name}",
+                                    help="basic: 300 lượt/tháng | premium: 600 lượt/tháng | pro: 1200 lượt/tháng"
+                                )
+                        elif new_plan == 'premium':
+                            # Legacy: if plan='premium', show tier selector
                             tier_options = ['basic', 'premium', 'pro']
                             current_tier_val = user.get('premium_tier', 'premium')
                             if current_tier_val not in tier_options:
@@ -341,12 +360,13 @@ def render_user_card(user, current_admin_user):
                         try:
                             from services.premium_usage_service import get_premium_ai_usage_monthly, get_topup_balance
                             user_id = user.get('id')
-                            if new_plan == 'premium' or user.get('plan') == 'premium':
+                            if new_plan in ['basic', 'premium', 'pro'] or user.get('plan') in ['basic', 'premium', 'pro']:
                                 usage = get_premium_ai_usage_monthly(user_id)
                                 st.info(f"""
-                                **Usage:** {usage.get('usage_count', 0)}/{usage.get('limit', 0)}
+                                **Usage:** {usage.get('count', 0)}/{usage.get('limit', 0)}
                                 **Remaining:** {usage.get('remaining', 0)}
                                 **Top-up:** {usage.get('topup_balance', 0)}
+                                **Total Remaining:** {usage.get('total_remaining', 0)}
                                 """)
                             else:
                                 topup = get_topup_balance(user_id)
@@ -377,7 +397,7 @@ def render_user_card(user, current_admin_user):
                                 email=new_email,
                                 role=new_role,
                                 plan=new_plan,
-                                premium_tier=new_tier if new_plan == 'premium' else None,
+                                premium_tier=new_tier if new_plan in ['basic', 'premium', 'pro'] else None,
                                 password=new_password if new_password else None,
                                 coins=new_coins,
                                 streak=new_streak,
@@ -819,8 +839,8 @@ def render_email_settings():
             st.warning("Không có settings nào trong database.")
 
 def render_premium_management():
-    """Quản lý Premium User"""
-    st.subheader("👑 Quản lý Premium User")
+    """Quản lý Subscription"""
+    st.subheader("💳 Quản lý Subscription")
     st.write("Điều chỉnh thời hạn Premium và số coin của user")
     
     users_list = get_all_users_list()
@@ -857,7 +877,25 @@ def render_premium_management():
             with col2:
                 st.markdown("#### Cập nhật")
                 with st.form("premium_update_form"):
-                    new_plan = st.selectbox("Plan:", ["free", "premium"], index=1 if current_plan == "premium" else 0)
+                    plan_options_all = ["free", "basic", "premium", "pro"]
+                    current_plan_index = plan_options_all.index(current_plan) if current_plan in plan_options_all else 0
+                    new_plan = st.selectbox("Plan:", plan_options_all, index=current_plan_index)
+                    
+                    # Premium Tier selector (only for premium tier plans)
+                    new_tier = None
+                    if new_plan in ['basic', 'premium', 'pro']:
+                        tier_options = ['basic', 'premium', 'pro']
+                        current_tier = selected_user.get('premium_tier', 'premium')
+                        if current_tier in tier_options:
+                            tier_index = tier_options.index(current_tier)
+                        else:
+                            tier_index = tier_options.index(new_plan) if new_plan in tier_options else 1
+                        new_tier = st.selectbox(
+                            "Tier:", 
+                            tier_options, 
+                            index=tier_index,
+                            help="basic: 300 lượt/tháng | premium: 600 lượt/tháng | pro: 1200 lượt/tháng"
+                        )
                     
                     col_date1, col_date2 = st.columns(2)
                     with col_date1:
@@ -871,7 +909,14 @@ def render_premium_management():
                     new_coin = current_coins + coin_change
                     
                     if st.form_submit_button("✅ Cập nhật", type="primary"):
-                        if update_user_premium(selected_user_id, new_plan, end_datetime, new_coin):
+                        # Update plan and tier
+                        from services.admin_service import admin_update_user_comprehensive
+                        success, msg = admin_update_user_comprehensive(
+                            user_id=selected_user_id,
+                            plan=new_plan,
+                            premium_tier=new_tier if new_plan in ['basic', 'premium', 'pro'] else None
+                        )
+                        if success and update_user_premium(selected_user_id, new_plan, end_datetime, new_coin):
                             # Clear cache to show updated coin immediately
                             st.cache_data.clear()
                             st.success("✅ Đã cập nhật thành công!")
@@ -882,7 +927,7 @@ def render_premium_management():
         
         st.divider()
         st.subheader("📋 Danh sách Premium Users")
-        premium_users = [u for u in users_list if u.get('plan') == 'premium']
+        premium_users = [u for u in users_list if u.get('plan') in ['basic', 'premium', 'pro']]
         if premium_users:
             df_premium = pd.DataFrame(premium_users)
             st.dataframe(df_premium[['username', 'name', 'plan', 'coins']], width='stretch')
@@ -896,14 +941,18 @@ def render_premium_management():
                 
                 if usage_list:
                     df_usage = pd.DataFrame(usage_list)
+                    # Calculate remaining from limit - usage_count
+                    df_usage['remaining'] = df_usage.apply(lambda row: max(0, row['limit'] - row['usage_count']), axis=1)
                     df_usage['status'] = df_usage.apply(lambda row: 
                         '🔴 Hết Limit' if row['usage_count'] >= row['limit'] 
                         else ('🟡 Gần Hết' if row['usage_count'] >= row['limit'] * 0.8 
                               else '🟢 Bình Thường'), axis=1)
                     
                     # Display with color coding
+                    display_cols = ['username', 'name', 'tier', 'usage_count', 'limit', 'remaining', 'topup_balance', 'total_remaining', 'percentage', 'status']
+                    available_cols = [col for col in display_cols if col in df_usage.columns]
                     st.dataframe(
-                        df_usage[['username', 'name', 'usage_count', 'limit', 'remaining', 'percentage', 'status']],
+                        df_usage[available_cols],
                         width='stretch'
                     )
                     
