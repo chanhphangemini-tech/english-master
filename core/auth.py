@@ -48,49 +48,46 @@ def check_login(username, password):
                 return "LOCKED"
             
             # Try bcrypt verification first
-            try:
-                # Check if password is already hashed (bcrypt hashes start with $2b$ or $2a$)
-                if db_pass.startswith('$2') and len(db_pass) >= 60:
-                    # It's a bcrypt hash, verify it
-                    try:
-                        is_valid = bcrypt.checkpw(password.encode('utf-8'), db_pass.encode('utf-8'))
-                        if is_valid:
-                            # Update last activity
-                            st.session_state.last_activity = datetime.now()
-                            logger.info(f"Login successful for user: {username}")
-                            return user
-                        else:
-                            logger.warning(f"Password verification failed for user: {username} (bcrypt hash mismatch)")
-                            return None
-                    except Exception as bcrypt_check_error:
-                        logger.error(f"Bcrypt checkpw error for user {username}: {bcrypt_check_error}")
-                        return None
-                else:
-                    # Legacy plain text password (should not happen for new users)
-                    logger.info(f"Legacy password detected for user: {username}")
-                    if db_pass == password:
+            # Check if password is already hashed (bcrypt hashes start with $2b$ or $2a$)
+            if db_pass.startswith('$2') and len(db_pass) >= 60:
+                # It's a bcrypt hash, verify it
+                try:
+                    # Ensure both are bytes
+                    password_bytes = password.encode('utf-8')
+                    hash_bytes = db_pass.encode('utf-8')
+                    
+                    is_valid = bcrypt.checkpw(password_bytes, hash_bytes)
+                    if is_valid:
+                        # Update last activity
                         st.session_state.last_activity = datetime.now()
-                        # --- AUTO-HASHING FOR LEGACY PASSWORDS ---
-                        try:
-                            logger.info(f"Auto-hashing legacy password for user: {username}")
-                            # Call the existing update function which handles hashing
-                            update_user_password(username, password)
-                        except Exception as e:
-                            logger.error(f"Failed to auto-hash password for {username}: {e}")
-                        # --- END AUTO-HASHING ---
+                        logger.info(f"Login successful for user: {username}")
                         return user
                     else:
-                        logger.warning(f"Legacy password mismatch for user: {username}")
+                        logger.warning(f"Password verification failed for user: {username} (bcrypt hash mismatch)")
+                        logger.debug(f"Password hash preview: {db_pass[:30]}...")
                         return None
-            except Exception as bcrypt_error:
-                logger.error(f"Bcrypt verification error for user {username}: {bcrypt_error}")
-                # Fallback to plain text comparison (for legacy passwords)
+                except Exception as bcrypt_check_error:
+                    logger.error(f"Bcrypt checkpw error for user {username}: {bcrypt_check_error}")
+                    import traceback
+                    logger.error(f"Traceback: {traceback.format_exc()}")
+                    return None
+            else:
+                # Legacy plain text password (should not happen for new users)
+                logger.info(f"Legacy password detected for user: {username} (hash length: {len(db_pass)})")
                 if db_pass == password:
                     st.session_state.last_activity = datetime.now()
-                    logger.info(f"Login successful for user: {username} (legacy password)")
+                    # --- AUTO-HASHING FOR LEGACY PASSWORDS ---
+                    try:
+                        logger.info(f"Auto-hashing legacy password for user: {username}")
+                        # Call the existing update function which handles hashing
+                        update_user_password(username, password)
+                    except Exception as e:
+                        logger.error(f"Failed to auto-hash password for {username}: {e}")
+                    # --- END AUTO-HASHING ---
                     return user
-                logger.warning(f"Password mismatch for user: {username}")
-                return None
+                else:
+                    logger.warning(f"Legacy password mismatch for user: {username}")
+                    return None
         else:
             logger.warning(f"Login failed: User '{username}' not found.")
     except Exception as e:
