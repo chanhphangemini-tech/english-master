@@ -851,21 +851,8 @@ def render_premium_management():
                     current_plan_index = plan_options_all.index(current_plan) if current_plan in plan_options_all else 0
                     new_plan = st.selectbox("Plan:", plan_options_all, index=current_plan_index)
                     
-                    # Premium Tier selector (only for premium tier plans)
-                    new_tier = None
-                    if new_plan in ['basic', 'premium', 'pro']:
-                        tier_options = ['basic', 'premium', 'pro']
-                        current_tier = selected_user.get('premium_tier', 'premium')
-                        if current_tier in tier_options:
-                            tier_index = tier_options.index(current_tier)
-                        else:
-                            tier_index = tier_options.index(new_plan) if new_plan in tier_options else 1
-                        new_tier = st.selectbox(
-                            "Tier:", 
-                            tier_options, 
-                            index=tier_index,
-                            help="basic: 300 lượt/tháng | premium: 600 lượt/tháng | pro: 1200 lượt/tháng"
-                        )
+                    # Premium Tier (plan name IS the tier name for basic/premium/pro)
+                    new_tier = new_plan if new_plan in ['basic', 'premium', 'pro'] else None
                     
                     col_date1, col_date2 = st.columns(2)
                     with col_date1:
