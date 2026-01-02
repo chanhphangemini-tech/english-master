@@ -410,12 +410,53 @@ def toggle_user_status(username, status):
         return False
 
 def delete_user(username):
-    if not supabase: return False
+    """Xóa user (chỉ admin mới có quyền)."""
+    if not supabase: 
+        return False
+    
+    # Prevent self-deletion
+    if st.session_state.get('user_info', {}).get('username') == username:
+        logger.warning(f"User {username} attempted to delete themselves")
+        return False
+    
     try:
-        supabase.table("Users").delete().eq("username", username).execute()
-        return True
+        # Try using service_role key if available (bypasses RLS)
+        import streamlit as st
+        import os
+        from supabase import create_client
+        
+        service_key = None
+        try:
+            service_key = st.secrets.get("supabase", {}).get("service_role_key")
+        except:
+            service_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+        
+        if service_key:
+            supabase_url = None
+            try:
+                supabase_url = st.secrets["supabase"]["url"]
+            except:
+                supabase_url = os.getenv("SUPABASE_URL")
+            
+            if supabase_url:
+                service_client = create_client(supabase_url, service_key)
+                result = service_client.table("Users").delete().eq("username", username).execute()
+                if result.data:
+                    logger.info(f"User {username} deleted successfully via service_role")
+                    return True
+        
+        # Fallback: Try regular delete (will use RLS policies)
+        result = supabase.table("Users").delete().eq("username", username).execute()
+        if result.data:
+            logger.info(f"User {username} deleted successfully")
+            return True
+        else:
+            logger.warning(f"User {username} not found or deletion failed")
+            return False
     except Exception as e:
-        logger.error(f"Error deleting user: {e}")
+        logger.error(f"Error deleting user {username}: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return False
 
 def admin_update_user_info(username, name, email, role, plan, password=None, premium_tier=None, coins=None, streak=None):

@@ -409,8 +409,13 @@ def render_user_card(user, current_admin_user):
                 with st.expander("🗑️ Xóa tài khoản này?"):
                     st.warning("⚠️ Hành động này không thể hoàn tác!")
                     if st.button("Xác nhận Xóa", key=f"confirm_del_{u_name}", type="primary"):
-                        delete_user(u_name)
-                        st.rerun()
+                        success = delete_user(u_name)
+                        if success:
+                            st.success("✅ Đã xóa user thành công!")
+                            time.sleep(1)
+                            st.rerun()
+                        else:
+                            st.error("❌ Không thể xóa user. Có thể do RLS policy hoặc user không tồn tại.")
         else:
             st.info("Đây là tài khoản của bạn. Không thể thực hiện hành động.")
 
