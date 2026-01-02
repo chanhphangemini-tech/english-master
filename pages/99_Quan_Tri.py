@@ -286,38 +286,8 @@ def render_user_card(user, current_admin_user):
                         # Premium Tier (chỉ hiện khi plan là premium tier)
                         new_tier = None
                         if new_plan in ['basic', 'premium', 'pro']:
-                            tier_options = ['basic', 'premium', 'pro']
-                            # Map plan to tier if plan is a tier name
-                            if new_plan in tier_options:
-                                new_tier = new_plan
-                            else:
-                                current_tier_val = user.get('premium_tier', 'premium')
-                                if current_tier_val not in tier_options:
-                                    current_tier_index = 1  # Default to 'premium'
-                                else:
-                                    current_tier_index = tier_options.index(current_tier_val)
-                                new_tier = st.selectbox(
-                                    "Premium Tier", 
-                                    options=tier_options,
-                                    index=current_tier_index,
-                                    key=f"comp_tier_{u_name}",
-                                    help="basic: 300 lượt/tháng | premium: 600 lượt/tháng | pro: 1200 lượt/tháng"
-                                )
-                        elif new_plan == 'premium':
-                            # Legacy: if plan='premium', show tier selector
-                            tier_options = ['basic', 'premium', 'pro']
-                            current_tier_val = user.get('premium_tier', 'premium')
-                            if current_tier_val not in tier_options:
-                                current_tier_index = 1  # Default to 'premium'
-                            else:
-                                current_tier_index = tier_options.index(current_tier_val)
-                            new_tier = st.selectbox(
-                                "Premium Tier", 
-                                options=tier_options,
-                                index=current_tier_index,
-                                key=f"comp_tier_{u_name}",
-                                help="basic: 300 lượt/tháng | premium: 600 lượt/tháng | pro: 1200 lượt/tháng"
-                            )
+                            # Plan name IS the tier name
+                            new_tier = new_plan
                     
                     with col2:
                         st.markdown("#### 💰 Kinh tế & Thống kê")
