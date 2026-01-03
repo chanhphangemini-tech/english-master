@@ -328,7 +328,7 @@ def render_learning_view(uid: int, progress_df: pd.DataFrame, account_type: str)
     st.markdown("### 🎯 Sẵn sàng kiểm tra?")
     c_mode, c_btn = st.columns([2, 1])
     with c_mode:
-        mode_selection = st.selectbox("Chọn chế độ kiểm tra:", ["Kiểm tra nghĩa (Chọn nghĩa đúng)", "Kiểm tra từ (Chọn từ đúng)"])
+        mode_selection = st.selectbox("Chọn chế độ kiểm tra:", ["Kiểm tra nghĩa (Điền nghĩa tiếng Việt)", "Kiểm tra từ (Điền từ tiếng Anh)"])
         st.session_state.quiz_type = "meaning" if "nghĩa" in mode_selection else "word"
     with c_btn:
         st.write("")
@@ -388,9 +388,15 @@ def score_quiz(uid: int, quiz_df: pd.DataFrame) -> None:
         
         is_right = False
         if st.session_state.quiz_type == "meaning":
-            is_right = (u_ans == correct_meaning)
+            # Normalize answers for comparison (case-insensitive, strip whitespace)
+            u_ans_normalized = normalize_meaning_text(u_ans.strip().lower() if u_ans else "")
+            correct_normalized = normalize_meaning_text(correct_meaning.strip().lower() if correct_meaning else "")
+            is_right = (u_ans_normalized == correct_normalized)
         else:  # quiz_type == "word"
-            is_right = (u_ans == row['word'])
+            # Normalize word answers (case-insensitive, strip whitespace)
+            u_ans_normalized = u_ans.strip().lower() if u_ans else ""
+            correct_word_normalized = row['word'].strip().lower() if row.get('word') else ""
+            is_right = (u_ans_normalized == correct_word_normalized)
 
         quality = 5 if is_right else 1
         

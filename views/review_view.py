@@ -167,25 +167,26 @@ def render_word_card(row: pd.Series, index: int) -> None:
 
 
 def render_quiz_question(index: int, row: pd.Series, quiz_type: str, attempt_count: int, all_words: pd.DataFrame) -> None:
-    """Render a single quiz question."""
+    """Render a single quiz question with text input."""
     meaning_dict = row.get('meaning', {}) if isinstance(row.get('meaning'), dict) else {}
     correct_meaning = meaning_dict.get('vietnamese', 'N/A')
-    
-    # Generate options
-    other_meanings = all_words['meaning'].apply(lambda x: x.get('vietnamese') if isinstance(x, dict) else None).dropna().unique().tolist()
-    if correct_meaning in other_meanings:
-        other_meanings.remove(correct_meaning)
-    options = random.sample(other_meanings, min(3, len(other_meanings))) + [correct_meaning]
-    random.shuffle(options)
 
     if quiz_type == "meaning":
         st.markdown(f"##### Câu {index + 1}: Từ **{row['word']}** có nghĩa là gì?")
-        st.radio("Chọn nghĩa đúng:", options, key=f"q_{index}_attempt_{attempt_count}", index=None)
+        st.text_input(
+            "Nhập nghĩa của từ (tiếng Việt):",
+            key=f"q_{index}_attempt_{attempt_count}",
+            placeholder="Nhập nghĩa của từ...",
+            help="Nhập nghĩa tiếng Việt của từ này"
+        )
     else:  # quiz_type == "word"
         st.markdown(f"##### Câu {index + 1}: Nghĩa **'{correct_meaning}'** là của từ nào?")
-        word_options = random.sample(all_words['word'].tolist(), min(3, len(all_words)-1)) + [row['word']]
-        random.shuffle(word_options)
-        st.radio("Chọn từ đúng:", word_options, key=f"q_{index}_attempt_{attempt_count}", index=None)
+        st.text_input(
+            "Nhập từ tiếng Anh:",
+            key=f"q_{index}_attempt_{attempt_count}",
+            placeholder="Nhập từ tiếng Anh...",
+            help="Nhập từ tiếng Anh có nghĩa này"
+        )
     
     st.divider()
 

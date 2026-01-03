@@ -1,138 +1,92 @@
-"""
-Vocabulary Utilities - Shared helper functions for vocabulary processing
+"""Vocabulary utilities for text normalization and processing."""
+import re
+import unicodedata
+from typing import Dict, Any, Optional
 
-This module provides utility functions used across multiple views
-to ensure consistency and reduce code duplication.
-
-Author: AI Assistant  
-Date: 2025-12-30
-"""
-
-import json
-import logging
-from typing import Any, Dict, Optional
-
-logger = logging.getLogger(__name__)
-
-
-def normalize_meaning(raw_meaning: Any) -> Dict[str, str]:
+def normalize_meaning_text(text: str) -> str:
     """
-    Normalize meaning field to dict format.
-    
-    Handles multiple input formats:
-    - Dict: Return as-is
-    - JSON string: Parse and return
-    - Plain text: Wrap in {"vietnamese": text}
-    - None/empty: Return default fallback
+    Normalize Vietnamese text for comparison (remove extra spaces, convert to lowercase).
+    This is used for comparing user input with correct answers in quiz.
     
     Args:
-        raw_meaning: Raw meaning value from database (dict, str, or None)
-        
+        text: Input text to normalize
+    
     Returns:
-        Dict with at least {"vietnamese": "..."} key
-        
-    Examples:
-        >>> normalize_meaning({"vietnamese": "xin chào"})
-        {"vietnamese": "xin chào"}
-        
-        >>> normalize_meaning('{"vietnamese": "xin chào"}')
-        {"vietnamese": "xin chào"}
-        
-        >>> normalize_meaning("xin chào")
-        {"vietnamese": "xin chào"}
-        
-        >>> normalize_meaning(None)
-        {"vietnamese": "Không có nghĩa"}
+        Normalized text (lowercase, stripped, single spaces)
     """
-    # Case 1: Already a dict
-    if isinstance(raw_meaning, dict): 
-        return raw_meaning
+    if not text:
+        return ""
     
-    # Case 2: String (could be JSON or plain text)
-    if isinstance(raw_meaning, str):
-        # Try parse as JSON first
-        try: 
-            parsed = json.loads(raw_meaning)
-            if isinstance(parsed, dict):
-                return parsed
-        except json.JSONDecodeError: 
-            pass
-        except Exception as e:
-            logger.warning(f"Unexpected error parsing meaning as JSON: {e}")
-        
-        # Treat as plain text Vietnamese meaning
-        if raw_meaning.strip():
-            return {"vietnamese": raw_meaning.strip()}
+    # Convert to lowercase and strip
+    normalized = text.lower().strip()
     
-    # Case 3: None, empty, or unsupported type
-    logger.debug(f"normalize_meaning received unsupported type: {type(raw_meaning)}")
-    return {"vietnamese": "Không có nghĩa"}
+    # Replace multiple spaces with single space
+    normalized = re.sub(r'\s+', ' ', normalized)
+    
+    return normalized
 
-
-def get_vietnamese_meaning(raw_meaning: Any, default: str = "Không có nghĩa") -> str:
+def normalize_meaning(meaning: Any) -> Dict[str, str]:
     """
-    Extract Vietnamese meaning string from raw meaning data.
+    Normalize meaning dictionary from vocabulary data.
+    Handles both dict and string formats.
     
     Args:
-        raw_meaning: Raw meaning value from database
-        default: Default value if no meaning found
-        
+        meaning: Meaning data (dict or string)
+    
+    Returns:
+        Dict with 'vietnamese' and 'english' keys
+    """
+    if isinstance(meaning, dict):
+        return {
+            'vietnamese': meaning.get('vietnamese', ''),
+            'english': meaning.get('english', '')
+        }
+    elif isinstance(meaning, str):
+        return {
+            'vietnamese': meaning,
+            'english': ''
+        }
+    else:
+        return {
+            'vietnamese': '',
+            'english': ''
+        }
+
+def get_vietnamese_meaning(meaning: Any) -> str:
+    """
+    Extract Vietnamese meaning from meaning data.
+    
+    Args:
+        meaning: Meaning data (dict or string)
+    
     Returns:
         Vietnamese meaning string
-        
-    Example:
-        >>> get_vietnamese_meaning({"vietnamese": "xin chào"})
-        "xin chào"
-        
-        >>> get_vietnamese_meaning(None)
-        "Không có nghĩa"
     """
-    normalized = normalize_meaning(raw_meaning)
-    return normalized.get("vietnamese", default)
-
+    if isinstance(meaning, dict):
+        return meaning.get('vietnamese', '')
+    elif isinstance(meaning, str):
+        return meaning
+    else:
+        return ''
 
 def format_pronunciation(pronunciation: Optional[str]) -> str:
     """
-    Format pronunciation for display.
+    Format pronunciation string for display.
     
     Args:
-        pronunciation: Raw pronunciation string from database
-        
+        pronunciation: Pronunciation string (e.g., "/həˈloʊ/")
+    
     Returns:
-        Formatted pronunciation or empty string if N/A
-        
-    Example:
-        >>> format_pronunciation("/həˈloʊ/")
-        "/həˈloʊ/"
-        
-        >>> format_pronunciation("N/A")
-        ""
-        
-        >>> format_pronunciation(None)
-        ""
+        Formatted pronunciation string
     """
     if not pronunciation:
-        return ""
+        return ''
     
+    # Ensure pronunciation is wrapped in slashes if not already
     pronunciation = pronunciation.strip()
-    
-    # Filter out N/A or empty
-    if pronunciation.upper() == "N/A" or not pronunciation:
-        return ""
+    if not pronunciation.startswith('/'):
+        pronunciation = '/' + pronunciation
+    if not pronunciation.endswith('/'):
+        pronunciation = pronunciation + '/'
     
     return pronunciation
-
-
-def should_display_pronunciation(pronunciation: Optional[str]) -> bool:
-    """
-    Check if pronunciation should be displayed.
-    
-    Args:
-        pronunciation: Pronunciation string
-        
-    Returns:
-        True if pronunciation should be shown, False otherwise
-    """
-    formatted = format_pronunciation(pronunciation)
-    return bool(formatted)
-
