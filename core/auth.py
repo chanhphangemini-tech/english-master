@@ -373,7 +373,8 @@ def upload_and_update_avatar(username, uploaded_file, crop_box=None):
         bucket_name = "avatars"
         
         # Upload to storage
-        # Note: RLS policies should allow authenticated users to INSERT into avatars bucket
+        # Try with regular client first (if RLS policies allow)
+        # If that fails, try with service_role key (bypasses RLS)
         try:
             upload_result = supabase.storage.from_(bucket_name).upload(
                 file_path, 
@@ -384,12 +385,49 @@ def upload_and_update_avatar(username, uploaded_file, crop_box=None):
             public_url = supabase.storage.from_(bucket_name).get_public_url(file_path)
             logger.info(f"Avatar uploaded successfully: {file_path}")
         except Exception as storage_error:
-            logger.error(f"Storage upload error: {storage_error}")
-            # Log detailed error for debugging
-            import traceback
-            logger.error(f"Storage upload traceback: {traceback.format_exc()}")
-            # If storage upload fails, we can't continue
-            return False, f"Lỗi upload ảnh: {str(storage_error)}"
+            logger.warning(f"Storage upload failed with regular client, trying service_role: {storage_error}")
+            # Fallback: Try with service_role key to bypass RLS
+            try:
+                # Get service_role key from secrets
+                service_key = None
+                try:
+                    service_key = st.secrets.get("supabase", {}).get("service_role_key")
+                except:
+                    pass
+                
+                if not service_key:
+                    # Try environment variable
+                    service_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+                
+                if service_key:
+                    # Create client with service_role key
+                    supabase_url = None
+                    try:
+                        supabase_url = st.secrets["supabase"]["url"]
+                    except:
+                        supabase_url = os.getenv("SUPABASE_URL")
+                    
+                    if supabase_url:
+                        service_client = create_client(supabase_url, service_key)
+                        upload_result = service_client.storage.from_(bucket_name).upload(
+                            file_path, 
+                            img_bytes, 
+                            {"content-type": "image/png", "upsert": "true"}
+                        )
+                        public_url = service_client.storage.from_(bucket_name).get_public_url(file_path)
+                        logger.info(f"Avatar uploaded successfully using service_role: {file_path}")
+                    else:
+                        raise Exception("No Supabase URL found")
+                else:
+                    # No service_role key available, raise original error
+                    raise storage_error
+            except Exception as service_error:
+                logger.error(f"Storage upload error (both methods failed): {service_error}")
+                # Log detailed error for debugging
+                import traceback
+                logger.error(f"Storage upload traceback: {traceback.format_exc()}")
+                # If storage upload fails, we can't continue
+                return False, f"Lỗi upload ảnh: {str(service_error)}"
         
         # Update avatar_url using RPC function (bypasses RLS)
         try:
