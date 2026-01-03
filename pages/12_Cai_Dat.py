@@ -3,7 +3,7 @@ import time
 import logging
 from typing import Dict, Any
 
-from core.auth import change_password, get_user_settings, upload_and_update_avatar, refresh_user_info
+from core.auth import change_password, get_user_settings, upload_and_update_avatar
 from core.theme_applier import apply_page_theme
 from views.settings_view import (
     render_avatar_upload_section,
