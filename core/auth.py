@@ -381,7 +381,7 @@ def upload_and_update_avatar(username, uploaded_file, crop_box=None):
             upload_result = supabase.storage.from_(bucket_name).upload(
                 file_path, 
                 img_bytes, 
-                {"content-type": "image/png", "upsert": "true"}
+                file_options={"content-type": "image/png", "upsert": "true"}
             )
             # Get public URL
             public_url = supabase.storage.from_(bucket_name).get_public_url(file_path)
@@ -411,10 +411,11 @@ def upload_and_update_avatar(username, uploaded_file, crop_box=None):
                     
                     if supabase_url:
                         service_client = create_client(supabase_url, service_key)
+                        # Upload with service_role key (bypasses RLS)
                         upload_result = service_client.storage.from_(bucket_name).upload(
                             file_path, 
                             img_bytes, 
-                            {"content-type": "image/png", "upsert": "true"}
+                            file_options={"content-type": "image/png", "upsert": "true"}
                         )
                         public_url = service_client.storage.from_(bucket_name).get_public_url(file_path)
                         logger.info(f"Avatar uploaded successfully using service_role: {file_path}")
