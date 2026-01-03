@@ -24,10 +24,17 @@ tab_profile, tab_pass, tab_notif = st.tabs(["👤 Hồ Sơ Cá Nhân", "🔐 Đ�
 
 # Avatar Upload Handler
 def handle_avatar_upload(username: str, uploaded_file: Any, crop_box: Any = None) -> None:
+    from core.auth import refresh_user_info
     ok, res = upload_and_update_avatar(username, uploaded_file, crop_box)
     if ok:
         st.success("✅ Đổi ảnh đại diện thành công!")
-        st.session_state.user_info['avatar_url'] = res
+        # Refresh user info from database to ensure all data is up-to-date
+        user_id = st.session_state.user_info.get('id')
+        if user_id:
+            refresh_user_info(user_id)
+        else:
+            # Fallback: just update avatar_url in session_state
+            st.session_state.user_info['avatar_url'] = res
         time.sleep(1)
         st.rerun()
     else:
