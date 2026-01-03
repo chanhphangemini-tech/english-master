@@ -372,16 +372,22 @@ def upload_and_update_avatar(username, uploaded_file, crop_box=None):
         file_path = f"avatar_{username}_{int(time.time())}.png"
         bucket_name = "avatars"
         
-        # Upload to storage (this may still fail due to Storage RLS, but we'll handle it)
+        # Upload to storage
+        # Note: RLS policies should allow authenticated users to INSERT into avatars bucket
         try:
-            supabase.storage.from_(bucket_name).upload(
+            upload_result = supabase.storage.from_(bucket_name).upload(
                 file_path, 
                 img_bytes, 
                 {"content-type": "image/png", "upsert": "true"}
             )
+            # Get public URL
             public_url = supabase.storage.from_(bucket_name).get_public_url(file_path)
+            logger.info(f"Avatar uploaded successfully: {file_path}")
         except Exception as storage_error:
             logger.error(f"Storage upload error: {storage_error}")
+            # Log detailed error for debugging
+            import traceback
+            logger.error(f"Storage upload traceback: {traceback.format_exc()}")
             # If storage upload fails, we can't continue
             return False, f"Lỗi upload ảnh: {str(storage_error)}"
         
