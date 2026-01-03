@@ -153,7 +153,6 @@ def render_learning_view(uid: int, progress_df: pd.DataFrame, account_type: str)
     # Lấy kế hoạch học tập - Lấy TẤT CẢ từ chưa học từ các chủ đề đã chọn
     if selected_topics:
         # Lấy tất cả từ chưa học từ các topic đã chọn (không giới hạn per topic)
-        from services.vocab_service import load_vocab_data
         from core.database import supabase
         
         # 1. Lấy danh sách ID các từ đã học
