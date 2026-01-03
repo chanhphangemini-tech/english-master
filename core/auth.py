@@ -306,6 +306,39 @@ def update_user_avatar(username, avatar_file):
     """Legacy function - use upload_and_update_avatar instead."""
     return upload_and_update_avatar(username, avatar_file, None)
 
+def crop_image_to_square(img, crop_box=None):
+    """
+    Cắt ảnh thành hình vuông.
+    
+    Args:
+        img: PIL Image object
+        crop_box: Tuple (x, y, width, height) hoặc None để tự động cắt ở giữa
+        
+    Returns:
+        PIL Image object đã được cắt thành hình vuông
+    """
+    if crop_box:
+        x, y, w, h = crop_box
+        # Ensure square crop
+        size = min(w, h)
+        # Center the crop box
+        center_x = x + w // 2
+        center_y = y + h // 2
+        x = max(0, center_x - size // 2)
+        y = max(0, center_y - size // 2)
+        # Ensure we don't go out of bounds
+        img_width, img_height = img.size
+        x = min(x, img_width - size)
+        y = min(y, img_height - size)
+        return img.crop((x, y, x + size, y + size))
+    else:
+        # Auto crop to center square
+        width, height = img.size
+        size = min(width, height)
+        left = (width - size) // 2
+        top = (height - size) // 2
+        return img.crop((left, top, left + size, top + size))
+
 def upload_and_update_avatar(username, uploaded_file, crop_box=None):
     """Upload avatar image to storage and update user avatar_url."""
     if not supabase: 
