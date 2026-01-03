@@ -4,9 +4,11 @@ import time
 import io
 from PIL import Image
 from core.database import supabase
+from supabase import create_client
 import secrets
 import logging
 from datetime import datetime, timedelta
+import os
 
 logger = logging.getLogger(__name__)
 
