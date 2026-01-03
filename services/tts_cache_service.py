@@ -243,16 +243,31 @@ def cache_audio(
         except Exception as rpc_error:
             # Fallback to direct upsert if RPC fails
             logger.debug(f"RPC upsert failed, trying direct: {rpc_error}")
-            supabase.table("TTSAudioCache").upsert(
-                cache_data,
-                on_conflict="text_hash"
-            ).execute()
-            logger.info(f"Cached audio for text hash {text_hash}")
-            return file_url
+            try:
+                supabase.table("TTSAudioCache").upsert(
+                    cache_data,
+                    on_conflict="text_hash"
+                ).execute()
+                logger.info(f"Cached audio for text hash {text_hash} via direct upsert")
+                return file_url
+            except Exception as fallback_error:
+                # Direct upsert also failed (likely RLS) - this is expected
+                # Cache failure is non-critical - audio was already uploaded to Storage
+                logger.debug(f"Direct upsert also failed (non-critical): {fallback_error}")
+                # Return file_url anyway since upload to Storage succeeded
+                return file_url
         
     except Exception as e:
-        logger.error(f"Error caching audio: {e}")
-        return None
+        # Log error but don't fail - cache is optimization, not critical
+        error_msg = str(e)
+        # Check if it's an RLS error (expected in some cases)
+        if 'row-level security policy' in error_msg or '403' in error_msg or 'Unauthorized' in error_msg:
+            logger.debug(f"Cache error (non-critical, RLS): {e}")
+        else:
+            logger.warning(f"Error caching audio (non-critical): {e}")
+        # Return file_url if we have it (upload to Storage might have succeeded)
+        # Otherwise return None (caller will handle it)
+        return file_url if 'file_url' in locals() and file_url else None
 
 def verify_audio_exists(text_hash: str) -> bool:
     """
