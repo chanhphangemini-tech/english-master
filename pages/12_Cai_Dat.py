@@ -27,27 +27,27 @@ tab_profile, tab_pass, tab_notif = st.tabs(["👤 Hồ Sơ Cá Nhân", "🔐 Đ�
 
 # Avatar Upload Handler
 def handle_avatar_upload(username: str, uploaded_file: Any, crop_box: Any = None) -> None:
-    from core.auth import refresh_user_info
     ok, res = upload_and_update_avatar(username, uploaded_file, crop_box)
     if ok:
         st.success("✅ Đổi ảnh đại diện thành công!")
-        # Refresh user info from database to ensure all data is up-to-date
+        # Update session state immediately so sidebar and profile show new avatar right away
+        st.session_state.user_info['avatar_url'] = res
+        
+        # Clear sidebar stats cache to force reload
         user_id = st.session_state.user_info.get('id')
         if user_id:
-            refresh_success = refresh_user_info(user_id)
-            if refresh_success:
-                logger.info(f"User info refreshed successfully for user_id: {user_id}")
-            else:
-                # Fallback: just update avatar_url in session_state
-                logger.warning(f"Refresh failed, updating session_state directly")
-                st.session_state.user_info['avatar_url'] = res
-        else:
-            # Fallback: just update avatar_url in session_state
-            st.session_state.user_info['avatar_url'] = res
-        # Clear sidebar stats cache to force reload
-        stats_cache_key = f'sidebar_stats_{user_id}'
-        if stats_cache_key in st.session_state:
-            del st.session_state[stats_cache_key]
+            stats_cache_key = f'sidebar_stats_{user_id}'
+            if stats_cache_key in st.session_state:
+                del st.session_state[stats_cache_key]
+        
+        # Also refresh user_info from database in background (optional, for consistency)
+        try:
+            from core.auth import refresh_user_info
+            refresh_user_info(user_id)
+        except Exception as e:
+            logger.warning(f"Could not refresh user_info from database: {e}")
+            # Not critical - we already updated session_state
+        
         time.sleep(1)
         st.rerun()
     else:
