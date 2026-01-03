@@ -231,6 +231,8 @@ def add_word_to_srs(user_id: int, vocab_id: int) -> bool:
     """Thêm từ mới vào danh sách học (trạng thái learning)."""
     if not supabase: return False
     try:
+        # Ensure vocab_id is int (may come as float from pandas/numpy)
+        vocab_id = int(vocab_id)
         # Kiểm tra xem đã có chưa
         existing = supabase.table("UserVocabulary").select("id").eq("user_id", int(user_id)).eq("vocab_id", vocab_id).execute()
         if existing.data: return True 

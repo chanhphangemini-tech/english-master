@@ -450,12 +450,16 @@ def score_quiz(uid: int, quiz_df: pd.DataFrame) -> None:
             if word_type == 'review':
                 vid = result['row'].get('vocab_id')
                 if vid:
+                    # Convert to int (pandas/numpy may return float)
+                    vid = int(float(vid))
                     success = update_srs_stats(uid, vid, result['quality'])
                     if not success:
                         logger.warning(f"Failed to update SRS stats for vocab_id {vid}")
             elif word_type == 'new':
                 vocab_id = result['row'].get('id')
                 if vocab_id:
+                    # Convert to int (pandas/numpy may return float)
+                    vocab_id = int(float(vocab_id))
                     success = add_word_to_srs(uid, vocab_id)
                     if success:
                         # Nếu từ mới được thêm thành công và trả lời đúng, có thể update SRS stats
