@@ -334,7 +334,12 @@ def analyze_user_strengths(user_id: int, days: int = 30) -> Dict:
                     if skill_type in skill_strengths:
                         skill_strengths[skill_type] = progress
         except Exception as e:
-            logger.warning(f"Error analyzing skill strengths: {e}")
+            # Log Resource temporarily unavailable errors at DEBUG level (non-critical, temporary network issues)
+            error_str = str(e)
+            if 'Resource temporarily unavailable' in error_str or '[Errno 11]' in error_str:
+                logger.debug(f"Error analyzing skill strengths (temporary network issue): {e}")
+            else:
+                logger.warning(f"Error analyzing skill strengths: {e}")
         
         # 4. Level Strengths
         level_strengths = []
