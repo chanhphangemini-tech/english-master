@@ -115,16 +115,17 @@ def render_learning_view(uid: int, progress_df: pd.DataFrame, account_type: str)
                     st.switch_page("pages/15_Premium.py")
 
         # Lấy danh sách chủ đề
-        vocab_df = pd.DataFrame(load_vocab_data(target_level))
+        vocab_data = load_vocab_data(target_level)
+        vocab_df_temp = pd.DataFrame(vocab_data)
         topic_options = []
         topic_map = {}
 
-        if not vocab_df.empty:
-            raw_topics = sorted(list(set(vocab_df['topic'].dropna().unique())))
+        if not vocab_df_temp.empty:
+            raw_topics = sorted(list(set(vocab_df_temp['topic'].dropna().unique())))
             user_learned_words = set(progress_df['Vocabulary'].apply(lambda x: x.get('word') if isinstance(x, dict) else None).dropna().unique()) if not progress_df.empty else set()
 
             for t in raw_topics:
-                words_in_topic = vocab_df[vocab_df['topic'] == t]['word'].unique()
+                words_in_topic = vocab_df_temp[vocab_df_temp['topic'] == t]['word'].unique()
                 total_w = len(words_in_topic)
                 learned_w = len([w for w in words_in_topic if w in user_learned_words])
                 
@@ -137,6 +138,11 @@ def render_learning_view(uid: int, progress_df: pd.DataFrame, account_type: str)
         else:
             selected_topics = []
             st.warning(f"Không có từ vựng cho cấp độ {target_level}")
+    
+    # Đảm bảo vocab_df và selected_topics được định nghĩa bên ngoài expander block
+    vocab_df = vocab_df_temp if 'vocab_df_temp' in locals() else pd.DataFrame(load_vocab_data(target_level))
+    if 'selected_topics' not in locals():
+        selected_topics = []
 
     # Lấy kế hoạch học tập - Lấy TẤT CẢ từ chưa học từ các chủ đề đã chọn
     if selected_topics:
