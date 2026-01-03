@@ -92,9 +92,15 @@ progress_df = pd.DataFrame(load_progress(uid))
 
 def render_learning_view(uid: int, progress_df: pd.DataFrame, account_type: str) -> None:
     """Render the main learning view with vocabulary cards."""
+    # Initialize variables outside expander to ensure they're always defined
+    all_levels = [f"A{i}" for i in range(1, 3)] + [f"B{i}" for i in range(1, 3)] + [f"C{i}" for i in range(1, 3)]
+    target_level = all_levels[0]  # Default to first level
+    daily_limit = 10  # Default value
+    vocab_df_temp = pd.DataFrame()
+    selected_topics = []
+    
     # Configuration section (using existing logic for now, can be moved to view later)
     with st.expander("⚙️ Cấu hình nội dung học", expanded=True):
-        all_levels = [f"A{i}" for i in range(1, 3)] + [f"B{i}" for i in range(1, 3)] + [f"C{i}" for i in range(1, 3)]
         target_level = st.selectbox("1. Chọn trình độ:", options=all_levels, index=0)
         
         # Logic Premium - Check if user has premium subscription (basic/premium/pro)
