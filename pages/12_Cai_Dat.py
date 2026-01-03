@@ -31,10 +31,19 @@ def handle_avatar_upload(username: str, uploaded_file: Any, crop_box: Any = None
         # Refresh user info from database to ensure all data is up-to-date
         user_id = st.session_state.user_info.get('id')
         if user_id:
-            refresh_user_info(user_id)
+            refresh_success = refresh_user_info(user_id)
+            if refresh_success:
+                logger.info(f"User info refreshed successfully for user_id: {user_id}")
+            else:
+                # Fallback: just update avatar_url in session_state
+                logger.warning(f"Refresh failed, updating session_state directly")
+                st.session_state.user_info['avatar_url'] = res
         else:
             # Fallback: just update avatar_url in session_state
             st.session_state.user_info['avatar_url'] = res
+        # Clear cache to force reload
+        from core.data_cache import clear_all_caches
+        clear_all_caches()
         time.sleep(1)
         st.rerun()
     else:
