@@ -174,6 +174,8 @@ def update_srs_stats(user_id: int, vocab_id: int, quality: int) -> bool:
     """
     if not supabase: return False
     try:
+        # Ensure vocab_id is int (may come as float from pandas/numpy)
+        vocab_id = int(vocab_id)
         # 1. Lấy thông tin hiện tại
         res = supabase.table("UserVocabulary").select("*").eq("user_id", int(user_id)).eq("vocab_id", vocab_id).single().execute()
         if not res.data: return False
