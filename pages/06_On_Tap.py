@@ -359,19 +359,18 @@ def render_quiz_view(uid: int) -> None:
             st.rerun()
         return
 
-    with st.form("quiz_form"):
-        for index, row in quiz_df.iterrows():
-            render_quiz_question(index, row, st.session_state.quiz_type, st.session_state.attempt_count, quiz_df)
-        
-        if not st.session_state.quiz_submitted:
+    if not st.session_state.quiz_submitted:
+        with st.form("quiz_form"):
+            for index, row in quiz_df.iterrows():
+                render_quiz_question(index, row, st.session_state.quiz_type, st.session_state.attempt_count, quiz_df)
+            
             if st.form_submit_button("📤 NỘP BÀI", type="primary"):
                 for index, row in quiz_df.iterrows():
                     k = f"q_{index}_attempt_{st.session_state.attempt_count}"
                     st.session_state.saved_quiz_answers[k] = st.session_state.get(k, "")
                 st.session_state.quiz_submitted = True
                 st.rerun()
-
-    if st.session_state.quiz_submitted:
+    else:
         score_quiz(uid, quiz_df)
 
 def score_quiz(uid: int, quiz_df: pd.DataFrame) -> None:
