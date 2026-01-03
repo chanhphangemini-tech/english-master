@@ -138,26 +138,28 @@ def render_learning_view(uid: int, progress_df: pd.DataFrame, account_type: str)
             selected_topics = []
             st.warning(f"Không có từ vựng cho cấp độ {target_level}")
 
-    # Lấy kế hoạch học tập - FIX: Lấy TẤT CẢ từ tất cả chủ đề đã chọn
+    # Lấy kế hoạch học tập - Lấy TẤT CẢ từ chưa học từ các chủ đề đã chọn
     if selected_topics:
-        # Lấy từ TẤT CẢ chủ đề đã chọn, không giới hạn per topic
-        all_new_words = []
-        # Lấy tất cả từ có thể từ mỗi topic (lấy nhiều hơn để đảm bảo đủ)
-        for topic in selected_topics:
-            topic_words = get_daily_learning_batch(uid, target_level, daily_limit * 2, topic)
-            all_new_words.extend(topic_words)
+        # Lấy tất cả từ chưa học từ các topic đã chọn (không giới hạn per topic)
+        from services.vocab_service import load_vocab_data
+        from core.database import supabase
         
-        # Loại bỏ duplicates và giới hạn tổng số từ
-        seen_words = set()
-        unique_words = []
-        for word in all_new_words:
-            word_id = word.get('id') or word.get('vocab_id')
-            if word_id and word_id not in seen_words:
-                seen_words.add(word_id)
-                unique_words.append(word)
-                if len(unique_words) >= daily_limit:
-                    break
-        new_words_df = unique_words
+        # 1. Lấy danh sách ID các từ đã học
+        learned_res = supabase.table("UserVocabulary").select("vocab_id").eq("user_id", int(uid)).execute()
+        learned_ids = [item['vocab_id'] for item in learned_res.data] if learned_res.data else []
+        
+        # 2. Lấy tất cả từ vựng từ vocab_df (đã filter theo level) và filter theo topics
+        all_vocab = vocab_df[vocab_df['topic'].isin(selected_topics)].copy()
+        
+        # 3. Loại bỏ các từ đã học
+        if learned_ids:
+            all_vocab = all_vocab[~all_vocab['id'].isin(learned_ids)]
+        
+        # 4. Convert to list of dicts và giới hạn số lượng
+        all_new_words = all_vocab.to_dict('records')
+        
+        # 5. Giới hạn số lượng theo daily_limit
+        new_words_df = all_new_words[:daily_limit] if len(all_new_words) > daily_limit else all_new_words
     else:
         new_words_df = get_daily_learning_batch(uid, target_level, daily_limit, "General")
     
