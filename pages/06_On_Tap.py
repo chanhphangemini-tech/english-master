@@ -26,6 +26,7 @@ from views.review_view import (
     calculate_quiz_score,
     render_quiz_score_summary
 )
+from core.vocab_utils import normalize_meaning_text
 
 st.set_page_config(page_title="Học & Ôn Tập | English Master", page_icon="✍️", layout="wide")
 
