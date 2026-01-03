@@ -97,10 +97,16 @@ def render_learning_view(uid: int, progress_df: pd.DataFrame, account_type: str)
         all_levels = [f"A{i}" for i in range(1, 3)] + [f"B{i}" for i in range(1, 3)] + [f"C{i}" for i in range(1, 3)]
         target_level = st.selectbox("1. Chọn trình độ:", options=all_levels, index=0)
         
-        # Logic Premium
-        max_words = 50 if account_type == 'premium' else 20
+        # Logic Premium - Check if user has premium subscription (basic/premium/pro)
+        from services.premium_usage_service import has_premium_subscription
+        user_plan = st.session_state.user_info.get('plan', 'free')
+        is_admin_user = str(st.session_state.user_info.get('role', 'user')).lower() == 'admin'
+        is_premium_user = has_premium_subscription(user_plan=user_plan) or is_admin_user
+        
+        # Premium users (Basic/Premium/Pro) have no limit, Free users are limited to 20
+        max_words = 999 if is_premium_user else 20
         daily_limit = st.number_input("2. Số từ mới mỗi ngày:", min_value=5, max_value=max_words, value=min(10, max_words), step=5)
-        if account_type != 'premium':
+        if not is_premium_user:
             col1, col2 = st.columns([3, 1])
             with col1:
                 st.caption(f"🔒 Free: Tối đa 20 từ.")
