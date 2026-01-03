@@ -149,8 +149,12 @@ async def text_to_speech_dialogue(script, voice1="en-US-GuyNeural", voice2="en-U
     # Try multiple patterns to match different formats
     dialogue_parts = []
     
-    # Pattern 1: Match explicit speaker labels (Speaker 1/2, A/B, etc.)
-    pattern1 = r'(?:Speaker\s*[12]|Person\s*[12]|A|B|Male|Female|Man|Woman|Ben|Anna):\s*(.+?)(?=(?:Speaker\s*[12]|Person\s*[12]|A|B|Male|Female|Man|Woman|Ben|Anna):|$)'
+    # Common male and female names for gender detection
+    male_names = ['mark', 'ben', 'john', 'mike', 'david', 'tom', 'james', 'robert', 'william', 'richard', 'joe', 'chris', 'daniel', 'michael', 'peter', 'paul', 'steve', 'bob']
+    female_names = ['sarah', 'anna', 'anna', 'emily', 'lisa', 'mary', 'jane', 'linda', 'susan', 'karen', 'nancy', 'betty', 'helen', 'sandra', 'donna', 'carol', 'michelle', 'laura', 'amy']
+    
+    # Pattern 1: Match explicit speaker labels (Speaker 1/2, A/B, names, etc.)
+    pattern1 = r'([A-Za-z\s]+?):\s*(.+?)(?=[A-Za-z\s]+?:|$)'
     matches1 = list(re.finditer(pattern1, script, re.IGNORECASE | re.DOTALL))
     
     if len(matches1) >= 2:  # At least 2 speakers found
@@ -165,14 +169,26 @@ async def text_to_speech_dialogue(script, voice1="en-US-GuyNeural", voice2="en-U
                 continue
             
             if text:
-                # Determine which voice to use
+                # Determine which voice to use based on speaker label
                 label_lower = speaker_label.lower()
-                if any(keyword in label_lower for keyword in ['male', 'man', 'guy', '1', 'a', 'ben']):
+                
+                # Check for explicit gender keywords
+                if any(keyword in label_lower for keyword in ['male', 'man', 'guy', 'boy']):
                     voice = voice1  # Male voice
-                elif any(keyword in label_lower for keyword in ['female', 'woman', 'lady', '2', 'b', 'anna']):
+                elif any(keyword in label_lower for keyword in ['female', 'woman', 'lady', 'girl']):
                     voice = voice2  # Female voice
+                # Check for common names
+                elif any(name in label_lower for name in male_names):
+                    voice = voice1  # Male voice
+                elif any(name in label_lower for name in female_names):
+                    voice = voice2  # Female voice
+                # Check for numeric/letter labels (Speaker 1, A, etc.)
+                elif any(keyword in label_lower for keyword in ['1', 'a']) and 'speaker' in label_lower:
+                    voice = voice1  # Speaker 1/A typically male
+                elif any(keyword in label_lower for keyword in ['2', 'b']) and 'speaker' in label_lower:
+                    voice = voice2  # Speaker 2/B typically female
                 else:
-                    # Alternate based on index
+                    # Alternate based on index as fallback
                     voice = voice1 if i % 2 == 0 else voice2
                 dialogue_parts.append((text, voice))
     
