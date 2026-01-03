@@ -76,6 +76,8 @@ if st.session_state.pt_step == 0:
             prompt = """
             Create a Placement Test content.
             1. Listening Script: A very simple conversation (80-100 words) about daily life (Level A1-A2).
+               IMPORTANT: Format the conversation with speaker labels like "A:" and "B:" or "Speaker 1:" and "Speaker 2:".
+               Example format: "A: Hello, how are you? B: I'm fine, thank you. A: What did you do yesterday?"
             2. Listening Questions: 5 MCQs based on script.
             3. Reading Passage: A simple article about "My Family" (100-150 words, Level A1-A2).
             4. Reading Questions: 5 MCQs.
@@ -84,7 +86,7 @@ if st.session_state.pt_step == 0:
             
             Return JSON:
             {
-                "lis_script": "...",
+                "lis_script": "A: ... B: ... A: ...",
                 "lis_qs": [{"q": "...", "opts": ["A", "B", "C", "D"], "a": "Correct Option"}],
                 "read_passage": "...",
                 "read_qs": [{"q": "...", "opts": ["A", "B", "C", "D"], "a": "Correct Option"}],

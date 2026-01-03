@@ -147,34 +147,34 @@ async def text_to_speech_dialogue(script, voice1="en-US-GuyNeural", voice2="en-U
     
     # Parse script to extract dialogue parts
     # Try multiple patterns to match different formats
-    patterns = [
-        r'(?:Speaker\s*[12]|Person\s*[12]|A|B|Male|Female|Man|Woman):\s*(.+?)(?=(?:Speaker\s*[12]|Person\s*[12]|A|B|Male|Female|Man|Woman):|$)',
-        r'([^:]+):\s*(.+?)(?=[^:]+:|$)',  # Generic "Label: Text" pattern
-    ]
-    
     dialogue_parts = []
     
-    # Try pattern matching first
-    for pattern in patterns:
-        matches = re.finditer(pattern, script, re.IGNORECASE | re.DOTALL)
-        parts = list(matches)
-        if len(parts) >= 2:  # At least 2 speakers
-            for i, match in enumerate(parts):
-                speaker_label = match.group(1).strip() if match.lastindex >= 1 else ""
-                text = match.group(2).strip() if match.lastindex >= 2 else match.group(0).split(':', 1)[1].strip() if ':' in match.group(0) else match.group(0).strip()
-                if text:
-                    # Determine which voice to use (alternate between voice1 and voice2)
-                    # Check if label indicates gender
-                    label_lower = speaker_label.lower()
-                    if any(gender in label_lower for gender in ['male', 'man', 'guy', '1', 'a']):
-                        voice = voice1
-                    elif any(gender in label_lower for gender in ['female', 'woman', 'lady', '2', 'b']):
-                        voice = voice2
-                    else:
-                        # Alternate: odd index = voice1, even index = voice2
-                        voice = voice1 if i % 2 == 0 else voice2
-                    dialogue_parts.append((text, voice))
-            break
+    # Pattern 1: Match explicit speaker labels (Speaker 1/2, A/B, etc.)
+    pattern1 = r'(?:Speaker\s*[12]|Person\s*[12]|A|B|Male|Female|Man|Woman|Ben|Anna):\s*(.+?)(?=(?:Speaker\s*[12]|Person\s*[12]|A|B|Male|Female|Man|Woman|Ben|Anna):|$)'
+    matches1 = list(re.finditer(pattern1, script, re.IGNORECASE | re.DOTALL))
+    
+    if len(matches1) >= 2:  # At least 2 speakers found
+        for i, match in enumerate(matches1):
+            # Extract speaker label and text
+            full_match = match.group(0)
+            if ':' in full_match:
+                parts = full_match.split(':', 1)
+                speaker_label = parts[0].strip()
+                text = parts[1].strip()
+            else:
+                continue
+            
+            if text:
+                # Determine which voice to use
+                label_lower = speaker_label.lower()
+                if any(keyword in label_lower for keyword in ['male', 'man', 'guy', '1', 'a', 'ben']):
+                    voice = voice1  # Male voice
+                elif any(keyword in label_lower for keyword in ['female', 'woman', 'lady', '2', 'b', 'anna']):
+                    voice = voice2  # Female voice
+                else:
+                    # Alternate based on index
+                    voice = voice1 if i % 2 == 0 else voice2
+                dialogue_parts.append((text, voice))
     
     # If pattern matching didn't work, try splitting by newlines or sentences
     if not dialogue_parts:
