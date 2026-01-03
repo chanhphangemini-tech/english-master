@@ -2,7 +2,7 @@
 import time
 from core.theme_applier import apply_page_theme
 from core.llm import generate_response_with_fallback, parse_json_response, evaluate_placement_test
-from core.tts import get_tts_audio
+from core.tts import get_tts_audio, get_tts_dialogue_audio
 from core.stt import recognize_audio
 from services.vocab_service import bulk_master_levels
 from core.data import supabase, get_user_stats
@@ -109,10 +109,11 @@ elif st.session_state.pt_step == 1:
     
     data = st.session_state.pt_data
     
-    # Audio
+    # Audio - Use dialogue audio for conversation scripts
     if 'pt_audio' not in st.session_state:
         with st.spinner("Đang tải âm thanh..."):
-            st.session_state.pt_audio = get_tts_audio(data['lis_script'])
+            # Use dialogue audio function to support 2 voices
+            st.session_state.pt_audio = get_tts_dialogue_audio(data['lis_script'])
             
     st.audio(st.session_state.pt_audio, format='audio/mp3')
     st.info("Hãy nghe đoạn hội thoại và trả lời câu hỏi bên dưới.")

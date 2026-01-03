@@ -1,6 +1,8 @@
 import edge_tts
 import asyncio
 import streamlit as st
+import re
+import io
 
 async def text_to_speech(text, voice="en-US-AriaNeural", max_retries=3, use_cache=True):
     """
@@ -108,6 +110,124 @@ async def text_to_speech(text, voice="en-US-AriaNeural", max_retries=3, use_cach
         print(f"TTS Error: {e}")
         return None
 
+async def text_to_speech_dialogue(script, voice1="en-US-GuyNeural", voice2="en-US-AriaNeural", use_cache=True):
+    """
+    Tạo audio cho dialogue/conversation với 2 giọng khác nhau.
+    
+    Format script có thể là:
+    - "Speaker 1: Hello. Speaker 2: Hi there."
+    - "A: Hello. B: Hi there."
+    - "Male: Hello. Female: Hi there."
+    - Hoặc format tự nhiên với newline giữa các câu
+    
+    Args:
+        script: Dialogue script text
+        voice1: Voice cho speaker đầu tiên (default: en-US-GuyNeural - Nam Mỹ)
+        voice2: Voice cho speaker thứ hai (default: en-US-AriaNeural - Nữ Mỹ)
+        use_cache: Whether to use cache
+    
+    Returns:
+        bytes: Audio data (MP3 format)
+    """
+    if not script or not script.strip():
+        return None
+    
+    # Check cache first
+    cache_key = f"dialogue_{script[:100]}_{voice1}_{voice2}"
+    if use_cache:
+        try:
+            from services.tts_cache_service import get_cached_audio
+            cached_result = get_cached_audio(cache_key, voice1)  # Use voice1 as cache key
+            if cached_result:
+                audio_bytes, file_url = cached_result
+                if audio_bytes:
+                    return audio_bytes
+        except Exception as e:
+            pass
+    
+    # Parse script to extract dialogue parts
+    # Try multiple patterns to match different formats
+    patterns = [
+        r'(?:Speaker\s*[12]|Person\s*[12]|A|B|Male|Female|Man|Woman):\s*(.+?)(?=(?:Speaker\s*[12]|Person\s*[12]|A|B|Male|Female|Man|Woman):|$)',
+        r'([^:]+):\s*(.+?)(?=[^:]+:|$)',  # Generic "Label: Text" pattern
+    ]
+    
+    dialogue_parts = []
+    
+    # Try pattern matching first
+    for pattern in patterns:
+        matches = re.finditer(pattern, script, re.IGNORECASE | re.DOTALL)
+        parts = list(matches)
+        if len(parts) >= 2:  # At least 2 speakers
+            for i, match in enumerate(parts):
+                speaker_label = match.group(1).strip() if match.lastindex >= 1 else ""
+                text = match.group(2).strip() if match.lastindex >= 2 else match.group(0).split(':', 1)[1].strip() if ':' in match.group(0) else match.group(0).strip()
+                if text:
+                    # Determine which voice to use (alternate between voice1 and voice2)
+                    # Check if label indicates gender
+                    label_lower = speaker_label.lower()
+                    if any(gender in label_lower for gender in ['male', 'man', 'guy', '1', 'a']):
+                        voice = voice1
+                    elif any(gender in label_lower for gender in ['female', 'woman', 'lady', '2', 'b']):
+                        voice = voice2
+                    else:
+                        # Alternate: odd index = voice1, even index = voice2
+                        voice = voice1 if i % 2 == 0 else voice2
+                    dialogue_parts.append((text, voice))
+            break
+    
+    # If pattern matching didn't work, try splitting by newlines or sentences
+    if not dialogue_parts:
+        # Split by double newlines or common dialogue separators
+        sentences = re.split(r'\n\n+|\n(?=[A-Z][^:]+:)', script)
+        sentences = [s.strip() for s in sentences if s.strip()]
+        
+        if len(sentences) >= 2:
+            # Alternate voices for each sentence
+            for i, sentence in enumerate(sentences):
+                # Remove speaker labels if present
+                text = re.sub(r'^(?:Speaker\s*[12]|Person\s*[12]|A|B|Male|Female|Man|Woman):\s*', '', sentence, flags=re.IGNORECASE).strip()
+                if text:
+                    voice = voice1 if i % 2 == 0 else voice2
+                    dialogue_parts.append((text, voice))
+        else:
+            # Single sentence or couldn't parse - use single voice
+            text = script.strip()
+            if text:
+                dialogue_parts.append((text, voice1))
+    
+    # If still no parts, just use the whole script with voice1
+    if not dialogue_parts:
+        dialogue_parts.append((script.strip(), voice1))
+    
+    # Generate audio for each part
+    audio_parts = []
+    for text, voice in dialogue_parts:
+        audio = await text_to_speech(text, voice, use_cache=False)  # Don't cache individual parts
+        if audio:
+            audio_parts.append(audio)
+            # Small pause between speakers (add silence - 0.3 seconds of silence)
+            # Edge TTS audio is MP3, we can't easily add silence without pydub
+            # So we'll just concatenate directly - the natural pause in speech should be enough
+            await asyncio.sleep(0.1)  # Small delay to avoid rate limiting
+    
+    # Concatenate all audio parts
+    if audio_parts:
+        final_audio = b"".join(audio_parts)
+        
+        # Cache the result
+        if use_cache and final_audio:
+            try:
+                from services.tts_cache_service import cache_audio
+                audio_length_seconds = len(final_audio) // 16000 if len(final_audio) > 0 else None
+                cache_audio(cache_key, voice1, final_audio, audio_length_seconds)
+            except Exception as e:
+                pass
+        
+        return final_audio
+    
+    return None
+
 def get_tts_audio(text, voice="en-US-AriaNeural"):
     """
     Hàm wrapper đồng bộ để gọi TTS an toàn trong Streamlit.
@@ -134,3 +254,23 @@ def get_tts_audio_no_cache(text, voice="en-US-AriaNeural"):
         asyncio.set_event_loop(loop)
     
     return loop.run_until_complete(text_to_speech(text, voice, use_cache=False))
+
+def get_tts_dialogue_audio(script, voice1="en-US-GuyNeural", voice2="en-US-AriaNeural"):
+    """
+    Hàm wrapper đồng bộ để tạo dialogue audio với 2 giọng.
+    
+    Args:
+        script: Dialogue script text (có thể có format "Speaker 1: ... Speaker 2: ..." hoặc tự nhiên)
+        voice1: Voice cho speaker đầu tiên (default: en-US-GuyNeural - Nam Mỹ)
+        voice2: Voice cho speaker thứ hai (default: en-US-AriaNeural - Nữ Mỹ)
+    
+    Returns:
+        bytes: Audio data (MP3 format)
+    """
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    
+    return loop.run_until_complete(text_to_speech_dialogue(script, voice1, voice2, use_cache=True))
