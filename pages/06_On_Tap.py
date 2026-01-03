@@ -127,7 +127,7 @@ def render_learning_view(uid: int, progress_df: pd.DataFrame, account_type: str)
         topic_options = []
         topic_map = {}
 
-        if not vocab_df_temp.empty:
+        if not vocab_df_temp.empty and len(vocab_data) > 0:
             raw_topics = sorted(list(set(vocab_df_temp['topic'].dropna().unique())))
             user_learned_words = set(progress_df['Vocabulary'].apply(lambda x: x.get('word') if isinstance(x, dict) else None).dropna().unique()) if not progress_df.empty else set()
 
@@ -144,7 +144,24 @@ def render_learning_view(uid: int, progress_df: pd.DataFrame, account_type: str)
             selected_topics = [topic_map[t] for t in selected_display_topics]
         else:
             selected_topics = []
-            st.warning(f"Không có từ vựng cho cấp độ {target_level}")
+            # Clear cache và thử lại một lần nữa
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"No vocabulary found for level {target_level}, data length: {len(vocab_data) if vocab_data else 0}")
+            
+            # Try to clear cache và load lại
+            try:
+                from streamlit import cache_data
+                cache_data.clear()
+                vocab_data_retry = load_vocab_data(target_level)
+                if vocab_data_retry and len(vocab_data_retry) > 0:
+                    st.info("🔄 Đã làm mới cache, vui lòng thử lại.")
+                    st.rerun()
+                else:
+                    st.warning(f"Không có từ vựng cho cấp độ {target_level} trong database. Vui lòng liên hệ admin.")
+            except Exception as e:
+                logger.error(f"Error clearing cache: {e}")
+                st.warning(f"Không có từ vựng cho cấp độ {target_level}")
     
     # Đảm bảo vocab_df và selected_topics được định nghĩa bên ngoài expander block
     vocab_df = vocab_df_temp if 'vocab_df_temp' in locals() else pd.DataFrame(load_vocab_data(target_level))
