@@ -41,9 +41,10 @@ def handle_avatar_upload(username: str, uploaded_file: Any, crop_box: Any = None
         else:
             # Fallback: just update avatar_url in session_state
             st.session_state.user_info['avatar_url'] = res
-        # Clear cache to force reload
-        from core.data_cache import clear_all_caches
-        clear_all_caches()
+        # Clear sidebar stats cache to force reload
+        stats_cache_key = f'sidebar_stats_{user_id}'
+        if stats_cache_key in st.session_state:
+            del st.session_state[stats_cache_key]
         time.sleep(1)
         st.rerun()
     else:
