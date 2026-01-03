@@ -176,29 +176,58 @@ async def text_to_speech_dialogue(script, voice1="en-US-GuyNeural", voice2="en-U
                     voice = voice1 if i % 2 == 0 else voice2
                 dialogue_parts.append((text, voice))
     
-    # If pattern matching didn't work, try splitting by newlines or sentences
+    # If pattern matching didn't work, try splitting by sentences (fallback)
     if not dialogue_parts:
-        # Split by double newlines or common dialogue separators
-        sentences = re.split(r'\n\n+|\n(?=[A-Z][^:]+:)', script)
-        sentences = [s.strip() for s in sentences if s.strip()]
+        # Split by sentence endings (. ! ?) to create dialogue turns
+        # This handles plain text conversations without explicit labels
+        sentences = re.split(r'([.!?]\s+)', script)
+        # Recombine sentences with their punctuation
+        combined_sentences = []
+        for i in range(0, len(sentences) - 1, 2):
+            if i + 1 < len(sentences):
+                combined_sentences.append(sentences[i] + sentences[i + 1])
+            else:
+                combined_sentences.append(sentences[i])
         
-        if len(sentences) >= 2:
+        # Filter out empty sentences
+        combined_sentences = [s.strip() for s in combined_sentences if s.strip()]
+        
+        if len(combined_sentences) >= 2:
             # Alternate voices for each sentence
-            for i, sentence in enumerate(sentences):
-                # Remove speaker labels if present
-                text = re.sub(r'^(?:Speaker\s*[12]|Person\s*[12]|A|B|Male|Female|Man|Woman):\s*', '', sentence, flags=re.IGNORECASE).strip()
+            for i, sentence in enumerate(combined_sentences):
+                # Remove any speaker labels if present
+                text = re.sub(r'^(?:Speaker\s*[12]|Person\s*[12]|A|B|Male|Female|Man|Woman|Ben|Anna):\s*', '', sentence, flags=re.IGNORECASE).strip()
                 if text:
                     voice = voice1 if i % 2 == 0 else voice2
                     dialogue_parts.append((text, voice))
+        elif len(combined_sentences) == 1:
+            # Single sentence - try to split by comma or and/or
+            text = combined_sentences[0]
+            # Remove any speaker labels
+            text = re.sub(r'^(?:Speaker\s*[12]|Person\s*[12]|A|B|Male|Female|Man|Woman|Ben|Anna):\s*', '', text, flags=re.IGNORECASE).strip()
+            # Split by common conjunctions
+            parts = re.split(r'\s+(and|or|but)\s+', text, flags=re.IGNORECASE)
+            if len(parts) >= 3:  # At least 2 parts with conjunction
+                for i, part in enumerate(parts):
+                    if part.strip() and part.lower() not in ['and', 'or', 'but']:
+                        voice = voice1 if i % 2 == 0 else voice2
+                        dialogue_parts.append((part.strip(), voice))
+            else:
+                # Can't split further - use single voice
+                dialogue_parts.append((text, voice1))
         else:
-            # Single sentence or couldn't parse - use single voice
+            # No sentences found - use whole script with single voice
             text = script.strip()
+            text = re.sub(r'^(?:Speaker\s*[12]|Person\s*[12]|A|B|Male|Female|Man|Woman|Ben|Anna):\s*', '', text, flags=re.IGNORECASE).strip()
             if text:
                 dialogue_parts.append((text, voice1))
     
-    # If still no parts, just use the whole script with voice1
+    # Final fallback: if still no parts, use whole script with voice1
     if not dialogue_parts:
-        dialogue_parts.append((script.strip(), voice1))
+        text = script.strip()
+        text = re.sub(r'^(?:Speaker\s*[12]|Person\s*[12]|A|B|Male|Female|Man|Woman|Ben|Anna):\s*', '', text, flags=re.IGNORECASE).strip()
+        if text:
+            dialogue_parts.append((text, voice1))
     
     # Generate audio for each part
     audio_parts = []
