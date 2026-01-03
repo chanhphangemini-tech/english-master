@@ -1,5 +1,6 @@
 ﻿import streamlit as st
 import time
+import logging
 from typing import Dict, Any
 
 from core.auth import change_password, get_user_settings, upload_and_update_avatar
@@ -9,6 +10,8 @@ from views.settings_view import (
     render_password_change_form,
     render_notification_settings
 )
+
+logger = logging.getLogger(__name__)
 
 # --- Auth Check ---
 if not st.session_state.get("logged_in"):
