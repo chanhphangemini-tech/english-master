@@ -17,6 +17,8 @@ logger = logging.getLogger(__name__)
 if not st.session_state.get("logged_in"):
     st.switch_page("home.py")
 
+# IMPORTANT: Apply theme/sidebar AFTER handling uploads, but we can't control that
+# So we need to ensure session_state is updated BEFORE apply_page_theme runs
 apply_page_theme()  # Apply theme + sidebar + auth
 
 st.title("⚙️ Cài Đặt Tài Khoản")
@@ -28,16 +30,16 @@ tab_profile, tab_pass, tab_notif = st.tabs(["👤 Hồ Sơ Cá Nhân", "🔐 Đ�
 # Avatar Upload Handler - EXACTLY LIKE REFERENCE CODE
 def handle_avatar_upload(username: str, uploaded_file: Any, crop_box: Any = None) -> None:
     """
-    Handle avatar upload. EXACTLY like reference code - update session_state directly, NO refresh_user_info.
+    Handle avatar upload. EXACTLY like reference code - update session_state directly.
     """
     ok, res = upload_and_update_avatar(username, uploaded_file, crop_box)
     if ok:
         st.success("✅ Đổi ảnh đại diện thành công!")
         
-        # EXACTLY like reference code: Update session_state directly, NO refresh_user_info
+        # EXACTLY like reference code: Update session_state directly
         st.session_state.user_info['avatar_url'] = res
         
-        # Clear sidebar stats cache (like reference code clears get_top_3_details)
+        # Clear sidebar stats cache
         user_id = st.session_state.user_info.get('id')
         if user_id:
             stats_cache_key = f'sidebar_stats_{user_id}'
