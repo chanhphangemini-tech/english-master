@@ -30,25 +30,42 @@ def handle_avatar_upload(username: str, uploaded_file: Any, crop_box: Any = None
     ok, res = upload_and_update_avatar(username, uploaded_file, crop_box)
     if ok:
         st.success("✅ Đổi ảnh đại diện thành công!")
-        # Update session state immediately so sidebar and profile show new avatar right away
+        
+        # CRITICAL: Update session state IMMEDIATELY and FORCE refresh
+        user_id = st.session_state.user_info.get('id')
+        
+        # 1. Update avatar_url in session_state immediately
+        if 'user_info' not in st.session_state:
+            st.session_state.user_info = {}
         st.session_state.user_info['avatar_url'] = res
         
-        # Clear sidebar stats cache to force reload
-        user_id = st.session_state.user_info.get('id')
-        if user_id:
-            stats_cache_key = f'sidebar_stats_{user_id}'
-            if stats_cache_key in st.session_state:
-                del st.session_state[stats_cache_key]
-        
-        # Also refresh user_info from database in background (optional, for consistency)
+        # 2. Force refresh user_info from database to ensure consistency
         try:
             from core.auth import refresh_user_info
             refresh_user_info(user_id)
+            # After refresh, update avatar_url again to ensure it's there
+            if 'user_info' in st.session_state:
+                st.session_state.user_info['avatar_url'] = res
         except Exception as e:
-            logger.warning(f"Could not refresh user_info from database: {e}")
-            # Not critical - we already updated session_state
+            logger.warning(f"Could not refresh user_info: {e}")
         
-        time.sleep(1)
+        # 3. Clear ALL relevant caches
+        user_id = st.session_state.user_info.get('id')
+        if user_id:
+            # Clear sidebar stats cache
+            stats_cache_key = f'sidebar_stats_{user_id}'
+            if stats_cache_key in st.session_state:
+                del st.session_state[stats_cache_key]
+            
+            # Clear any user_info cache
+            cache_keys_to_remove = [
+                key for key in st.session_state.keys()
+                if key.startswith('cache_user_info_') or key.startswith('cache_user_stats_')
+            ]
+            for key in cache_keys_to_remove:
+                del st.session_state[key]
+        
+        # 4. Force rerun immediately (no sleep needed)
         st.rerun()
     else:
         st.error(f"Lỗi: {res}")
