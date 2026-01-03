@@ -180,7 +180,9 @@ def render_word_detail_card(word_data: Dict[str, Any], index: int) -> None:
             st.caption(badges)
         
         with col_audio:
+            # Audio button - TTS is already cached, so rerun is fast
             if st.button("🔊", key=f"audio_{index}_{word_data.get('id', index)}", help="Phát âm"):
+                # TTS uses cache internally, so this is fast
                 audio_bytes = get_tts_audio(word_data['word'])
                 if audio_bytes:
                     st.audio(audio_bytes, format='audio/mp3', autoplay=True)
@@ -251,16 +253,34 @@ def render_word_detail_card(word_data: Dict[str, Any], index: int) -> None:
                     st.markdown("**💡 Ghi chú cách dùng:**")
                     st.info(translated_notes)
         
-        # Action button
-        if st.button("➕ Thêm vào học", key=f"add_{index}_{word_data.get('id', index)}"):
+        # Action button - process click and show result
+        vocab_id = word_data.get('id', index)
+        button_key = f"add_{index}_{vocab_id}"
+        button_state_key = f"button_state_{vocab_id}"
+        
+        # Initialize button state if not exists
+        if button_state_key not in st.session_state:
+            st.session_state[button_state_key] = None
+        
+        # Show success/warning message if button was previously clicked
+        if st.session_state[button_state_key] == 'success':
+            st.success("✅ Đã thêm vào danh sách học!")
+        elif st.session_state[button_state_key] == 'warning':
+            st.warning("⚠️ Từ này đã có trong danh sách học của bạn.")
+        
+        # Button click handler - process immediately when clicked
+        if st.button("➕ Thêm vào học", key=button_key):
             from services.vocab_service import add_word_to_srs
             uid = st.session_state.user_info['id']
-            success = add_word_to_srs(uid, word_data['id'])
+            success = add_word_to_srs(uid, vocab_id)
             if success:
+                st.session_state[button_state_key] = 'success'
                 st.success("✅ Đã thêm vào danh sách học!")
-                st.rerun()
             else:
+                st.session_state[button_state_key] = 'warning'
                 st.warning("⚠️ Từ này đã có trong danh sách học của bạn.")
+            # Rerun is necessary to show the message, but all data is cached so it's fast
+            st.rerun()
 
 
 def render_dictionary_grid(df: pd.DataFrame, page_size: int = 12) -> None:
@@ -275,30 +295,30 @@ def render_dictionary_grid(df: pd.DataFrame, page_size: int = 12) -> None:
         return
     
     # Pagination - use session_state to persist page number
-    if 'dict_page' not in st.session_state:
-        st.session_state.dict_page = 1
+    # Use a stable key based on filter state to reset page when filters change
+    filter_hash = hash((tuple(df.index[:10]) if len(df) > 0 else ()))
+    pagination_key = f'dict_page_{filter_hash}'
     
-    total_pages = (len(df) - 1) // page_size + 1
+    if pagination_key not in st.session_state:
+        st.session_state[pagination_key] = 1
+    
+    total_pages = (len(df) - 1) // page_size + 1 if len(df) > 0 else 1
     
     if total_pages > 1:
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
-            page = st.number_input(
+            # Use selectbox instead of number_input for better performance
+            page_options = list(range(1, total_pages + 1))
+            page = st.selectbox(
                 f"Trang (1-{total_pages})",
-                min_value=1,
-                max_value=total_pages,
-                value=st.session_state.dict_page,
-                step=1,
-                key="dict_page_input"
+                options=page_options,
+                index=st.session_state[pagination_key] - 1 if st.session_state[pagination_key] <= total_pages else 0,
+                key=f"dict_page_select_{filter_hash}"
             )
-            # Update session_state when page changes
-            if page != st.session_state.dict_page:
-                st.session_state.dict_page = page
-                st.rerun()
-            page = st.session_state.dict_page
+            st.session_state[pagination_key] = page
     else:
         page = 1
-        st.session_state.dict_page = 1
+        st.session_state[pagination_key] = 1
     
     # Calculate slice
     start_idx = (page - 1) * page_size
