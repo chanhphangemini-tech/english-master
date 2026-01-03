@@ -380,6 +380,9 @@ def score_quiz(uid: int, quiz_df: pd.DataFrame) -> None:
     total_q = len(quiz_df)
     import logging
     logger = logging.getLogger(__name__)
+    
+    # Store results for potential saving
+    quiz_results = []
 
     for index, row in quiz_df.iterrows():
         input_key = f"q_{index}_attempt_{st.session_state.attempt_count}"
@@ -400,32 +403,16 @@ def score_quiz(uid: int, quiz_df: pd.DataFrame) -> None:
             correct_word_normalized = row['word'].strip().lower() if row.get('word') else ""
             is_right = (u_ans_normalized == correct_word_normalized)
 
-        quality = 5 if is_right else 1
-        
-        # Update database - FIX: Luôn lưu từ vào SRS để ẩn khỏi danh sách học mới
-        word_type = row.get('type')
-        if word_type == 'review':
-            vid = row.get('vocab_id')
-            if vid:
-                success = update_srs_stats(uid, vid, quality)
-                if not success:
-                    logger.warning(f"Failed to update SRS stats for vocab_id {vid}")
-        elif word_type == 'new':
-            # FIX: Luôn thêm từ vào SRS (kể cả khi sai), để ẩn khỏi danh sách học mới
-            vocab_id = row.get('id')
-            if vocab_id:
-                success = add_word_to_srs(uid, vocab_id)
-                if success and is_right:
-                    # Nếu thêm thành công và trả lời đúng, update SRS stats với quality cao
-                    # Note: add_word_to_srs đã tạo record, nhưng quality mặc định là learning
-                    # Nếu muốn đánh dấu là đã thuộc ngay, có thể gọi update_srs_stats sau
-                    # Nhưng vì add_word_to_srs đã set last_reviewed_at = now, từ sẽ được ẩn khỏi danh sách mới
-                    pass
-                elif not success:
-                    logger.warning(f"Failed to add word to SRS for vocab_id {vocab_id}")
-
         if is_right:
             correct_count += 1
+        
+        # Store result for potential saving (only if 100%)
+        quiz_results.append({
+            'index': index,
+            'row': row,
+            'is_right': is_right,
+            'quality': 5 if is_right else 1
+        })
         
         # Render result
         render_quiz_result(index, row, u_ans, st.session_state.quiz_type, is_right)
@@ -437,26 +424,55 @@ def score_quiz(uid: int, quiz_df: pd.DataFrame) -> None:
     if final_score == 100:
         play_sound("success")
         st.balloons()
+        
+        # CHỈ LƯU TỪ VỰNG KHI ĐẠT 100%
+        st.success("🎉 Hoàn thành 100%! Đang lưu tiến độ...")
+        
+        for result in quiz_results:
+            word_type = result['row'].get('type')
+            if word_type == 'review':
+                vid = result['row'].get('vocab_id')
+                if vid:
+                    success = update_srs_stats(uid, vid, result['quality'])
+                    if not success:
+                        logger.warning(f"Failed to update SRS stats for vocab_id {vid}")
+            elif word_type == 'new':
+                vocab_id = result['row'].get('id')
+                if vocab_id:
+                    success = add_word_to_srs(uid, vocab_id)
+                    if success:
+                        # Nếu từ mới được thêm thành công và trả lời đúng, có thể update SRS stats
+                        # Nhưng vì đã đạt 100%, tất cả đều đúng, nên quality = 5
+                        # Tuy nhiên, add_word_to_srs đã set due_date = now, nên từ sẽ xuất hiện lại trong review ngay
+                        # Có thể gọi update_srs_stats để cập nhật quality cao hơn, nhưng từ đã được thêm rồi
+                        pass
+                    elif not success:
+                        logger.warning(f"Failed to add word to SRS for vocab_id {vocab_id}")
+        
+        log_activity(uid, "quiz_complete", correct_count)
+        
+        # Thưởng coin - FIX: Check kết quả và log lỗi nếu thất bại
+        coin_reward = correct_count * 2
+        if coin_reward > 0:
+            coin_success = add_coins(uid, coin_reward)
+            if coin_success:
+                st.toast(f"💰 Bạn nhận được {coin_reward} coins!", icon="💰")
+            else:
+                logger.error(f"Failed to add {coin_reward} coins for user {uid}")
+                st.warning(f"⚠️ Có lỗi khi thêm coins. Vui lòng liên hệ admin nếu vấn đề tiếp tục.")
+        
+        # FIX: Clear cache để cập nhật stats ngay lập tức
+        try:
+            st.cache_data.clear()
+        except:
+            pass
     else:
         play_sound("fail")
-
-    log_activity(uid, "quiz_complete", correct_count)
-    
-    # Thưởng coin - FIX: Check kết quả và log lỗi nếu thất bại
-    coin_reward = correct_count * 2
-    if coin_reward > 0:
-        coin_success = add_coins(uid, coin_reward)
-        if coin_success:
-            st.toast(f"💰 Bạn nhận được {coin_reward} coins!", icon="💰")
-        else:
-            logger.error(f"Failed to add {coin_reward} coins for user {uid}")
-            st.warning(f"⚠️ Có lỗi khi thêm coins. Vui lòng liên hệ admin nếu vấn đề tiếp tục.")
-    
-    # FIX: Clear cache để cập nhật stats ngay lập tức
-    try:
-        st.cache_data.clear()
-    except:
-        pass
+        st.error(f"❌ Bạn cần đạt 100% để lưu tiến độ. Hiện tại: {correct_count}/{total_q} câu đúng ({final_score:.1f}%)")
+        st.info("💡 Vui lòng làm lại bài tập và trả lời đúng tất cả các câu để lưu từ vựng vào hệ thống.")
+        
+        # KHÔNG lưu gì cả nếu không đạt 100%
+        log_activity(uid, "quiz_complete", correct_count)
 
     c_save, c_retry = st.columns(2)
     with c_save:
