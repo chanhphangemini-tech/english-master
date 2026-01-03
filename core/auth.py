@@ -443,21 +443,64 @@ def upload_and_update_avatar(username, uploaded_file, crop_box=None):
                 result_text = str(rpc_result.data) if not isinstance(rpc_result.data, str) else rpc_result.data
                 if result_text.startswith('SUCCESS:'):
                     logger.info(f"Avatar updated successfully for user {username} via RPC")
-                    return True, public_url
+                    # Verify the update actually happened
+                    verify_result = supabase.table("Users").select("avatar_url").eq("id", user_id).single().execute()
+                    if verify_result.data and verify_result.data.get('avatar_url') == public_url:
+                        logger.info(f"Verified: avatar_url in database matches uploaded URL")
+                        return True, public_url
+                    else:
+                        logger.warning(f"RPC returned success but database verification failed. DB value: {verify_result.data.get('avatar_url') if verify_result.data else 'None'}")
+                        # Continue to direct update fallback
                 elif result_text.startswith('ERROR:'):
                     error_msg = result_text.replace('ERROR:', '')
                     logger.error(f"RPC update_user_avatar_url error: {error_msg}")
-                    return False, error_msg
+                    # Continue to direct update fallback
         except Exception as rpc_error:
             logger.warning(f"RPC update_user_avatar_url failed, trying direct update: {rpc_error}")
-            # Fallback: Try direct update (may fail due to RLS)
+        
+        # Fallback: Try direct update using service_role key if available
+        try:
+            # Try with service_role key if available
+            service_key = None
             try:
-                supabase.table("Users").update({"avatar_url": public_url}).eq("username", username).execute()
-                logger.info(f"Avatar updated successfully for user {username} via direct update")
-                return True, public_url
-            except Exception as direct_error:
-                logger.error(f"Direct update also failed: {direct_error}")
-                return False, f"Lỗi cập nhật avatar: {str(direct_error)}"
+                service_key = st.secrets.get("supabase", {}).get("service_role_key")
+            except:
+                pass
+            
+            if not service_key:
+                service_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+            
+            if service_key:
+                # Use service_role client for direct update (bypasses RLS)
+                supabase_url = None
+                try:
+                    supabase_url = st.secrets["supabase"]["url"]
+                except:
+                    supabase_url = os.getenv("SUPABASE_URL")
+                
+                if supabase_url:
+                    service_client = create_client(supabase_url, service_key)
+                    update_result = service_client.table("Users").update({"avatar_url": public_url}).eq("id", user_id).execute()
+                    if update_result.data:
+                        logger.info(f"Avatar updated successfully for user {username} via service_role direct update")
+                        return True, public_url
+                    else:
+                        logger.error(f"Service role direct update returned no data")
+                else:
+                    logger.error("No Supabase URL found for service_role client")
+            else:
+                # Try with regular client (may fail due to RLS)
+                update_result = supabase.table("Users").update({"avatar_url": public_url}).eq("id", user_id).execute()
+                if update_result.data:
+                    logger.info(f"Avatar updated successfully for user {username} via direct update")
+                    return True, public_url
+                else:
+                    logger.error(f"Direct update returned no data")
+        except Exception as direct_error:
+            logger.error(f"Direct update failed: {direct_error}")
+            import traceback
+            logger.error(f"Direct update traceback: {traceback.format_exc()}")
+            return False, f"Lỗi cập nhật avatar: {str(direct_error)}"
         
         return False, "Lỗi không xác định khi cập nhật avatar"
     except Exception as e:
